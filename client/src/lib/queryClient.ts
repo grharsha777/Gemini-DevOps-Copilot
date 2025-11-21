@@ -29,8 +29,20 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    const url = queryKey.join("/") as string;
+    const headers: HeadersInit = {};
+
+    // Add GitHub PAT if available and the request is for GitHub API
+    if (url.includes("/api/github/")) {
+      const githubPat = localStorage.getItem("githubPat");
+      if (githubPat) {
+        headers["Authorization"] = `Bearer ${githubPat}`;
+      }
+    }
+
+    const res = await fetch(url, {
       credentials: "include",
+      headers,
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
