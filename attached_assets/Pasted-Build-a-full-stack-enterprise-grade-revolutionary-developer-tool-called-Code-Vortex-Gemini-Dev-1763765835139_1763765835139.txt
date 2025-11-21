@@ -1,0 +1,57 @@
+Build a full-stack, enterprise-grade, revolutionary developer tool called **Code Vortex – Gemini DevOps Copilot** with the following requirements:
+
+1️⃣ **Core Features**
+- Use **Gemini API (NOT OpenAI)** for all AI operations (gemini-2.0-flash, gemini-1.5-pro for deep reasoning).
+- Include **AI Coding Copilot** with:
+    - Streaming code generation
+    - Test generation
+    - Documentation generation
+    - Smart refactoring suggestions
+    - Boilerplate snippet creation
+- Provide **Explainable AI page**:
+    - Accept user code
+    - Return line-by-line explanation
+    - Highlight risks, performance notes, security issues
+    - Suggest tests and refactors
+- **Real-Time GitHub Insights Dashboard**:
+    - Summary cards: total commits (7 days), PRs (open/merged/closed), issues, hotspot files count
+    - Charts: commit activity (7–30 days), PR status, contributor activity
+    - Hotspot Table: file path, commit frequency, last modified, lightweight risk score, AI analysis popup
+- **Repo Hotspot Analysis**: Identify frequently changed/high-risk files, provide AI insights
+- **No backend server required**: Use **Netlify Functions** only
+- **Deployable on GitHub + Netlify**
+
+2️⃣ **Integrations**
+- GitHub, GitLab, Bitbucket, VS Code, Replit, Slack, Jira, Linear
+- GitHub PAT input saved in **localStorage**, never hardcoded
+- Fetch all repo data from GitHub REST API
+
+3️⃣ **Tech Stack**
+- Next.js 14+ (TypeScript, App Router)
+- TailwindCSS + shadcn/ui
+- lucide-react icons
+- Netlify Functions for serverless logic
+- Recharts for dashboard charts
+
+4️⃣ **Serverless Function Requirements**
+- `/netlify/functions/gemini.ts`:
+    - Accept prompt, mode, codeContext
+    - Call Gemini API with streaming enabled
+    - Return generated text with error handling and CORS headers
+- `/netlify/functions/githubRepos.ts`, `/githubActivity.ts`, `/githubFile.ts`:
+    - Fetch repos, commits, PRs, issues, raw file content
+    - Include proper TypeScript typings, error handling, CORS headers
+
+5️⃣ **UI/UX Design**
+- Dark mode default
+- Glassmorphism design
+- Smooth animations, hover transitions, loading skeletons
+- Landing page with 3D floating objects, particle effects, moving elements
+- Interactive dashboard with live metrics, animated counters, pulse indicators
+- Professional color scheme (blue/purple/pink gradients)
+- Fully responsive design
+- Use shadcn/ui components: Card, Button, Input, Dialog, Table
+- Include Navbar, Sidebar, AI Chat interface, Repo selector
+- Modern typography and spacing
+
+6️⃣ **Folder Structure**

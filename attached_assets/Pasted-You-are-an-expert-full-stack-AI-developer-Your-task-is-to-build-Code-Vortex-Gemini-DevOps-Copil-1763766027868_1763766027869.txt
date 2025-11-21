@@ -1,0 +1,53 @@
+You are an expert full-stack AI developer. Your task is to build **Code Vortex – Gemini DevOps Copilot**, a **revolutionary, hackathon-winning, full-stack developer tool** with the following specifications:
+
+1️⃣ **Core Concept**
+- AI Copilot using **Gemini API or GPT (latest model)** for all code generation, explanation, testing, documentation, and refactoring.
+- Real-time **GitHub Insights Dashboard** showing commits, PRs, issues, contributors, and hotspot file analysis.
+- Explainable AI: user can paste any code → returns line-by-line explanation, performance notes, security issues, suggested tests.
+- Serverless architecture using **Netlify Functions**, no traditional backend needed.
+- Fully deployable on **GitHub + Netlify**, production-ready.
+
+2️⃣ **Tech Stack**
+- Next.js 14+ (TypeScript, App Router)
+- TailwindCSS + shadcn/ui
+- lucide-react icons
+- Recharts for charts
+- Netlify Functions for backend logic
+- LocalStorage for user settings (PAT, theme, model)
+
+3️⃣ **UI/UX & Visuals**
+- Dark mode default
+- Glassmorphism with smooth gradients
+- Landing page with **3D floating cubes**, particle effects, moving objects
+- Smooth scroll animations, hover transitions, loading skeletons
+- Interactive dashboard, animated counters, live status pulses
+- Professional typography and spacing
+- Polished, hackathon-level aesthetic
+
+4️⃣ **Integrations**
+- GitHub, GitLab, Bitbucket, VS Code, Replit, Slack, Jira, Linear
+- Fetch GitHub repos, commits, PRs, issues, raw file content
+- AI hotspot detection: risk scoring for frequently changed files
+
+5️⃣ **AI Copilot Features**
+- Chat interface with streaming responses
+- Modes: generate code, tests, docs, boilerplate snippets, refactor suggestions
+- Gemini/GPT models toggle: standard vs pro/flash
+- Smart insights: analyze repos → key issues, potential bugs, suggested tests, performance improvements
+
+6️⃣ **Serverless Functions**
+- `/netlify/functions/gemini.ts`: accepts prompt, mode, codeContext → returns streaming AI response
+- `/netlify/functions/githubRepos.ts`, `/githubActivity.ts`, `/githubFile.ts`: fetch GitHub data with proper CORS, error handling, TypeScript types
+
+7️⃣ **Dashboard Requirements**
+- Summary Cards: commits (7 days), PRs (open/merged/closed), open issues, hotspot files
+- Charts: commit activity, PR status, contributor activity
+- Hotspot Table: file path, commit frequency, last modified, risk score, clickable AI analysis modal
+
+8️⃣ **Settings Page**
+- GitHub PAT input, repo selector
+- AI model selector (Flash / Pro)
+- Theme toggle (dark/light)
+- Store values in **localStorage**
+
+9️⃣ **Folder Structure**
