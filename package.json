@@ -103,8 +103,8 @@
   "devDependencies": {
     "plato": "^1.7.0",
     "snyk": "^1.1000.0",
-    "vitest": "^1.1.6",
-    "@vitest/ui": "^0.3.3",
+    "vitest": "^1.6.1",
+    "@vitest/ui": "^1.6.1",
     "@replit/vite-plugin-cartographer": "^0.4.4",
     "@replit/vite-plugin-dev-banner": "^0.1.1",
     "@replit/vite-plugin-runtime-error-modal": "^0.0.3",

@@ -6,7 +6,7 @@ services:
     startCommand: npm run start
     envVars:
       - key: NODE_VERSION
-        value: 20.16.0
+        value: 22.16.0
       - key: GEMINI_API_KEY
         sync: false
       - key: MISTRAL_API_KEY
