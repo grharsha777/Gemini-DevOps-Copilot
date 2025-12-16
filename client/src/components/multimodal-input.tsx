@@ -2,393 +2,387 @@ import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Mic, MicOff, Image, File, Video, Code, Camera, 
-  X, Upload, FileText, Music, FileCode
-} from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Mic,
+  MicOff,
+  Camera,
+  Upload,
+  Link,
+  Image as ImageIcon,
+  Video,
+  FileText,
+  X,
+  Send,
+  Sparkles,
+  Loader2
+} from "lucide-react";
 
-export interface MediaAttachment {
-  id: string;
-  type: "image" | "audio" | "video" | "file" | "code";
-  file: File;
-  preview?: string;
-  content?: string; // For code files
-}
-
-interface MultiModalInputProps {
-  value: string;
-  onChange: (value: string) => void;
-  onSend: (message: string, attachments?: MediaAttachment[]) => void;
+interface MultimodalInputProps {
+  onSubmit: (data: {
+    text?: string;
+    images?: File[];
+    audio?: File[];
+    video?: File[];
+    files?: File[];
+    urls?: string[];
+  }) => void;
+  isLoading?: boolean;
   placeholder?: string;
-  disabled?: boolean;
 }
 
-export function MultiModalInput({
-  value,
-  onChange,
-  onSend,
-  placeholder = "Type a message or use voice/image/file input...",
-  disabled = false,
-}: MultiModalInputProps) {
+interface MediaPreview {
+  id: string;
+  file: File;
+  type: 'image' | 'audio' | 'video' | 'file';
+  preview?: string;
+}
+
+export function MultimodalInput({
+  onSubmit,
+  isLoading = false,
+  placeholder = "Describe what you want to build..."
+}: MultimodalInputProps) {
+  const [text, setText] = useState("");
+  const [mediaPreviews, setMediaPreviews] = useState<MediaPreview[]>([]);
+  const [urls, setUrls] = useState<string[]>([]);
+  const [urlInput, setUrlInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
-  const [attachments, setAttachments] = useState<MediaAttachment[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
-  const codeInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const { toast } = useToast();
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Voice recording
-  const startRecording = useCallback(async () => {
+  const handleFileSelect = useCallback((files: FileList | null, type: 'image' | 'video' | 'audio' | 'file') => {
+    if (!files) return;
+
+    Array.from(files).forEach(file => {
+      const id = Date.now() + Math.random().toString(36).substr(2, 9);
+
+      if (type === 'image' && file.type.startsWith('image/')) {
+        const preview = URL.createObjectURL(file);
+        setMediaPreviews(prev => [...prev, { id, file, type: 'image', preview }]);
+      } else if (type === 'video' && file.type.startsWith('video/')) {
+        const preview = URL.createObjectURL(file);
+        setMediaPreviews(prev => [...prev, { id, file, type: 'video', preview }]);
+      } else if (type === 'audio' && file.type.startsWith('audio/')) {
+        setMediaPreviews(prev => [...prev, { id, file, type: 'audio' }]);
+      } else if (type === 'file') {
+        setMediaPreviews(prev => [...prev, { id, file, type: 'file' }]);
+      }
+    });
+  }, []);
+
+  const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
+      const chunks: Blob[] = [];
+      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const audioFile = new (File as any)([audioBlob], "voice-recording.webm", { type: "audio/webm" });
-        
-        const attachment: MediaAttachment = {
-          id: Date.now().toString(),
-          type: "audio",
-          file: audioFile,
-        };
-        
-        setAttachments((prev) => [...prev, attachment]);
-        stream.getTracks().forEach((track) => track.stop());
+        const audioBlob = new Blob(chunks, { type: 'audio/wav' });
+        const audioFile = new File([audioBlob], `recording-${Date.now()}.wav`, { type: 'audio/wav' });
+
+        const id = Date.now().toString();
+        setMediaPreviews(prev => [...prev, { id, file: audioFile, type: 'audio' }]);
+        stream.getTracks().forEach(track => track.stop());
       };
 
       mediaRecorder.start();
       setIsRecording(true);
-      toast({
-        title: "Recording started",
-        description: "Click the microphone again to stop recording",
-      });
-    } catch (error) {
-      toast({
-        title: "Microphone access denied",
-        description: "Please allow microphone access to use voice input",
-        variant: "destructive",
-      });
-    }
-  }, [toast]);
+      setRecordingTime(0);
 
-  const stopRecording = useCallback(() => {
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Error starting recording:', err);
+      alert('Could not access microphone. Please check permissions.');
+    }
+  };
+
+  const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      toast({
-        title: "Recording stopped",
-        description: "Voice message added",
-      });
-    }
-  }, [isRecording, toast]);
-
-  // File handling
-  const handleFileSelect = useCallback((type: "image" | "video" | "audio" | "file" | "code") => {
-    const inputMap = {
-      image: imageInputRef,
-      video: videoInputRef,
-      audio: audioInputRef,
-      code: codeInputRef,
-      file: fileInputRef,
-    };
-
-    inputMap[type].current?.click();
-  }, []);
-
-  const handleFileChange = useCallback(async (
-    event: React.ChangeEvent<HTMLInputElement>,
-    type: "image" | "video" | "audio" | "file" | "code"
-  ) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    Array.from(files).forEach((file) => {
-      const attachment: MediaAttachment = {
-        id: `${Date.now()}-${Math.random()}`,
-        type,
-        file,
-      };
-
-      // Generate preview for images
-      if (type === "image") {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          setAttachments((prev) => {
-            const updated = prev.map((att) =>
-              att.id === attachment.id ? { ...att, preview: e.target?.result as string } : att
-            );
-            return updated.length > prev.length ? updated : [...prev, { ...attachment, preview: e.target?.result as string }];
-          });
-        };
-        reader.readAsDataURL(file);
-      } else if (type === "code") {
-        // Read code file content
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          setAttachments((prev) => {
-            const updated = prev.map((att) =>
-              att.id === attachment.id ? { ...att, content: e.target?.result as string } : att
-            );
-            return updated.length > prev.length ? updated : [...prev, { ...attachment, content: e.target?.result as string }];
-          });
-        };
-        reader.readAsText(file);
-      } else {
-        setAttachments((prev) => [...prev, attachment]);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
       }
-    });
-
-    // Reset input
-    event.target.value = "";
-  }, []);
-
-  // Camera capture
-  const handleCameraCapture = useCallback(() => {
-    cameraInputRef.current?.click();
-  }, []);
-
-  const handleCameraChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    const file = files[0];
-    const attachment: MediaAttachment = {
-      id: Date.now().toString(),
-      type: "image",
-      file,
-    };
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setAttachments((prev) => [...prev, { ...attachment, preview: e.target?.result as string }]);
-    };
-    reader.readAsDataURL(file);
-
-    event.target.value = "";
-  }, []);
-
-  const removeAttachment = useCallback((id: string) => {
-    setAttachments((prev) => prev.filter((att) => att.id !== id));
-  }, []);
-
-  const handleSend = useCallback(() => {
-    if ((!value.trim() && attachments.length === 0) || disabled) return;
-    
-    onSend(value, attachments.length > 0 ? attachments : undefined);
-    setAttachments([]);
-    onChange("");
-  }, [value, attachments, onSend, onChange, disabled]);
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
     }
-  }, [handleSend]);
+  };
+
+  const addUrl = () => {
+    if (urlInput.trim() && !urls.includes(urlInput.trim())) {
+      setUrls(prev => [...prev, urlInput.trim()]);
+      setUrlInput("");
+    }
+  };
+
+  const removeMedia = (id: string) => {
+    setMediaPreviews(prev => {
+      const item = prev.find(p => p.id === id);
+      if (item?.preview) {
+        URL.revokeObjectURL(item.preview);
+      }
+      return prev.filter(p => p.id !== id);
+    });
+  };
+
+  const removeUrl = (url: string) => {
+    setUrls(prev => prev.filter(u => u !== url));
+  };
+
+  const handleSubmit = () => {
+    if (!text.trim() && mediaPreviews.length === 0 && urls.length === 0) return;
+
+    const data = {
+      text: text.trim() || undefined,
+      images: mediaPreviews.filter(p => p.type === 'image').map(p => p.file),
+      audio: mediaPreviews.filter(p => p.type === 'audio').map(p => p.file),
+      video: mediaPreviews.filter(p => p.type === 'video').map(p => p.file),
+      files: mediaPreviews.filter(p => p.type === 'file').map(p => p.file),
+      urls: urls.length > 0 ? urls : undefined,
+    };
+
+    onSubmit(data);
+
+    // Clear form after submission
+    setText("");
+    mediaPreviews.forEach(p => {
+      if (p.preview) URL.revokeObjectURL(p.preview);
+    });
+    setMediaPreviews([]);
+    setUrls([]);
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
-    <div className="space-y-2">
-      {/* Attachments Preview */}
-      {attachments.length > 0 && (
-        <div className="flex flex-wrap gap-2 p-2 bg-muted/50 rounded-lg">
-          {attachments.map((attachment) => (
-            <Card key={attachment.id} className="relative p-2 max-w-[200px]">
-              {attachment.type === "image" && attachment.preview && (
-                <img
-                  src={attachment.preview}
-                  alt="Preview"
-                  className="w-full h-24 object-cover rounded"
-                />
-              )}
-              {attachment.type === "audio" && (
-                <div className="flex items-center gap-2">
-                  <Music className="w-4 h-4" />
-                  <span className="text-xs truncate">{attachment.file.name}</span>
-                </div>
-              )}
-              {attachment.type === "video" && (
-                <div className="flex items-center gap-2">
-                  <Video className="w-4 h-4" />
-                  <span className="text-xs truncate">{attachment.file.name}</span>
-                </div>
-              )}
-              {attachment.type === "code" && (
-                <div className="flex items-center gap-2">
-                  <FileCode className="w-4 h-4" />
-                  <span className="text-xs truncate">{attachment.file.name}</span>
-                </div>
-              )}
-              {attachment.type === "file" && (
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  <span className="text-xs truncate">{attachment.file.name}</span>
-                </div>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
-                onClick={() => removeAttachment(attachment.id)}
-              >
-                <X className="w-3 h-3" />
-              </Button>
-              <Badge variant="secondary" className="text-xs mt-1">
-                {attachment.type}
-              </Badge>
-            </Card>
-          ))}
-        </div>
-      )}
+    <Card className="w-full">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Sparkles className="w-5 h-5" />
+          Multimodal AI Assistant
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Text Input */}
+        <Textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={placeholder}
+          className="min-h-[100px] resize-none"
+        />
 
-      {/* Input Area */}
-      <div className="flex gap-2">
-        <div className="flex-1 relative">
-          <Textarea
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            className="min-h-[60px] resize-none pr-24"
-            disabled={disabled}
-          />
-          
-          {/* Action Buttons */}
-          <div className="absolute right-2 bottom-2 flex gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => handleFileSelect("image")}
-              title="Upload Image"
-            >
-              <Image className="w-4 h-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={handleCameraCapture}
-              title="Camera"
-            >
-              <Camera className="w-4 h-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => handleFileSelect("file")}
-              title="Upload File"
-            >
-              <File className="w-4 h-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => handleFileSelect("code")}
-              title="Code File"
-            >
-              <Code className="w-4 h-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={isRecording ? stopRecording : startRecording}
-              title={isRecording ? "Stop Recording" : "Voice Input"}
-            >
-              {isRecording ? (
-                <MicOff className="w-4 h-4 text-red-500 animate-pulse" />
-              ) : (
-                <Mic className="w-4 h-4" />
-              )}
-            </Button>
+        {/* Media Previews */}
+        {mediaPreviews.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">Attached Media:</h4>
+            <ScrollArea className="max-h-32">
+              <div className="flex flex-wrap gap-2">
+                {mediaPreviews.map((preview) => (
+                  <div key={preview.id} className="relative group">
+                    <Badge variant="secondary" className="flex items-center gap-2 pr-8">
+                      {preview.type === 'image' && <ImageIcon className="w-4 h-4" />}
+                      {preview.type === 'video' && <Video className="w-4 h-4" />}
+                      {preview.type === 'audio' && <Mic className="w-4 h-4" />}
+                      {preview.type === 'file' && <FileText className="w-4 h-4" />}
+                      <span className="truncate max-w-24">{preview.file.name}</span>
+                      <button
+                        onClick={() => removeMedia(preview.id)}
+                        className="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                    {preview.preview && preview.type === 'image' && (
+                      <img
+                        src={preview.preview}
+                        alt={preview.file.name}
+                        className="mt-1 w-16 h-16 object-cover rounded border"
+                      />
+                    )}
+                    {preview.preview && preview.type === 'video' && (
+                      <video
+                        src={preview.preview}
+                        className="mt-1 w-16 h-16 object-cover rounded border"
+                        muted
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
           </div>
+        )}
+
+        {/* URLs */}
+        {urls.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">Linked URLs:</h4>
+            <div className="flex flex-wrap gap-2">
+              {urls.map((url) => (
+                <Badge key={url} variant="outline" className="flex items-center gap-2">
+                  <Link className="w-3 h-3" />
+                  <span className="truncate max-w-32">{url}</span>
+                  <button
+                    onClick={() => removeUrl(url)}
+                    className="ml-1 hover:bg-destructive hover:text-destructive-foreground rounded px-1"
+                  >
+                    ×
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Input Controls */}
+        <Tabs defaultValue="media" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="media">Media</TabsTrigger>
+            <TabsTrigger value="voice">Voice</TabsTrigger>
+            <TabsTrigger value="links">Links</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="media" className="space-y-2 mt-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => imageInputRef.current?.click()}
+                className="flex items-center gap-2"
+              >
+                <ImageIcon className="w-4 h-4" />
+                Image
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => videoInputRef.current?.click()}
+                className="flex items-center gap-2"
+              >
+                <Video className="w-4 h-4" />
+                Video
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => audioInputRef.current?.click()}
+                className="flex items-center gap-2"
+              >
+                <Mic className="w-4 h-4" />
+                Audio
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                File
+              </Button>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="voice" className="space-y-2 mt-4">
+            <div className="flex items-center gap-2">
+              <Button
+                variant={isRecording ? "destructive" : "outline"}
+                size="sm"
+                onClick={isRecording ? stopRecording : startRecording}
+                className="flex items-center gap-2"
+              >
+                {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                {isRecording ? `Stop (${formatTime(recordingTime)})` : "Record"}
+              </Button>
+              {isRecording && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                  Recording...
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="links" className="space-y-2 mt-4">
+            <div className="flex gap-2">
+              <Input
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder="Enter URL (GitHub repo, Figma design, etc.)"
+                onKeyDown={(e) => e.key === 'Enter' && addUrl()}
+              />
+              <Button size="sm" onClick={addUrl} disabled={!urlInput.trim()}>
+                Add
+              </Button>
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        {/* Submit Button */}
+        <div className="flex justify-end">
+          <Button
+            onClick={handleSubmit}
+            disabled={isLoading || (!text.trim() && mediaPreviews.length === 0 && urls.length === 0)}
+            className="flex items-center gap-2"
+          >
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
+            {isLoading ? "Processing..." : "Generate"}
+          </Button>
         </div>
 
-        <Button
-          onClick={handleSend}
-          disabled={disabled || (!value.trim() && attachments.length === 0) || isProcessing}
-          size="icon"
-          className="h-[60px] w-[60px]"
-        >
-          <Upload className="w-5 h-5" />
-        </Button>
-      </div>
-
-      {/* Hidden File Inputs */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={(e) => handleFileChange(e, "file")}
-        accept="*/*"
-      />
-      <input
-        ref={imageInputRef}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={(e) => handleFileChange(e, "image")}
-        accept="image/*"
-      />
-      <input
-        ref={videoInputRef}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={(e) => handleFileChange(e, "video")}
-        accept="video/*"
-      />
-      <input
-        ref={audioInputRef}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={(e) => handleFileChange(e, "audio")}
-        accept="audio/*"
-      />
-      <input
-        ref={codeInputRef}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={(e) => handleFileChange(e, "code")}
-        accept=".js,.ts,.jsx,.tsx,.py,.java,.cpp,.c,.cs,.go,.rs,.rb,.php,.swift,.kt,.scala,.sql,.html,.css,.json,.xml,.yaml,.yml,.md,.sh,.bash"
-      />
-      <input
-        ref={cameraInputRef}
-        type="file"
-        capture="environment"
-        className="hidden"
-        onChange={handleCameraChange}
-        accept="image/*"
-      />
-    </div>
+        {/* Hidden File Inputs */}
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => handleFileSelect(e.target.files, 'image')}
+        />
+        <input
+          ref={videoInputRef}
+          type="file"
+          accept="video/*"
+          multiple
+          className="hidden"
+          onChange={(e) => handleFileSelect(e.target.files, 'video')}
+        />
+        <input
+          ref={audioInputRef}
+          type="file"
+          accept="audio/*"
+          multiple
+          className="hidden"
+          onChange={(e) => handleFileSelect(e.target.files, 'audio')}
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => handleFileSelect(e.target.files, 'file')}
+        />
+      </CardContent>
+    </Card>
   );
 }
-

@@ -1,4 +1,4 @@
-import { Home, Code, FileText, BarChart3, Settings, Sparkles, Bot } from "lucide-react";
+import { Home, Code, FileText, BarChart3, Settings, Sparkles, Bot, Users } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -47,6 +47,11 @@ const menuItems = [
     title: "Playground",
     url: "/playground",
     icon: FileText,
+  },
+  {
+    title: "Community",
+    url: "/community",
+    icon: Users,
   },
   {
     title: "Settings",
