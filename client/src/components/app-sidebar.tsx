@@ -39,6 +39,16 @@ const menuItems = [
     icon: BarChart3,
   },
   {
+    title: "App Builder",
+    url: "/app-builder",
+    icon: Code,
+  },
+  {
+    title: "Playground",
+    url: "/playground",
+    icon: FileText,
+  },
+  {
     title: "Settings",
     url: "/settings",
     icon: Settings,

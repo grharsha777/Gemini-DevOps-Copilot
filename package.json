@@ -15,6 +15,8 @@
     "analysis:all": "npm run generate:all",
     "analysis:complexity": "node ./scripts/run-complexity.js",
     "analysis:security": "node ./scripts/run-security.js",
+    "analysis:snyk": "node ./scripts/run-snyk.js",
+    "db:create-tables": "node ./scripts/create-tables.js",
     "check": "tsc",
     "db:push": "drizzle-kit push"
   },
@@ -99,6 +101,7 @@
   },
   "devDependencies": {
     "plato": "^1.7.0",
+    "snyk": "^1.1000.0",
     "vitest": "^1.1.6",
     "@vitest/ui": "^0.3.3",
     "@replit/vite-plugin-cartographer": "^0.4.4",

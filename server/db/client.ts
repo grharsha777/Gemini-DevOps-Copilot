@@ -1,9 +1,5 @@
-import { Pool } from 'pg';
+import pkg from 'pg';
+const { Pool } = (pkg as any);
 
 const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  // Export a null client to avoid crashes; callers should check
-  export const pool = null as unknown as Pool;
-} else {
-  export const pool = new Pool({ connectionString });
-}
+export const pool = connectionString ? new Pool({ connectionString }) : null;

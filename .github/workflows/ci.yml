@@ -25,6 +25,11 @@ jobs:
         run: npm run analysis:complexity
         - name: Run security analysis
           run: npm run analysis:security
+        - name: Run Snyk scan (if token provided)
+          if: ${{ secrets.SNYK_TOKEN != '' }}
+          env:
+            SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          run: npm run analysis:snyk
         - name: Copy coverage summary to metrics
           run: |
             if [ -f coverage/coverage-summary.json ]; then
@@ -34,6 +39,12 @@ jobs:
             else
               echo "No coverage/coverage-summary.json found"
             fi
+        - name: Upload coverage to Codecov (if token provided)
+          if: ${{ secrets.CODECOV_TOKEN != '' }}
+          uses: codecov/codecov-action@v4
+          with:
+            token: ${{ secrets.CODECOV_TOKEN }}
+            files: coverage
       - name: Generate placeholder metrics
         run: npm run generate:all
       - name: Upload metrics

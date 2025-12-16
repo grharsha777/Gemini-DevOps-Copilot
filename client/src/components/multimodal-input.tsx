@@ -62,7 +62,7 @@ export function MultiModalInput({
 
       mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const audioFile = new File([audioBlob], "voice-recording.webm", { type: "audio/webm" });
+        const audioFile = new (File as any)([audioBlob], "voice-recording.webm", { type: "audio/webm" });
         
         const attachment: MediaAttachment = {
           id: Date.now().toString(),

@@ -4,12 +4,14 @@ const fs = require('fs');
 const path = require('path');
 
 const sql = `
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE IF NOT EXISTS users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   username text UNIQUE NOT NULL,
   email text,
   provider text,
   provider_id text,
+  role text DEFAULT 'user',
   created_at timestamptz DEFAULT now()
 );
 

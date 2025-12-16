@@ -10,6 +10,7 @@ import { randomUUID } from "crypto";
 import { generateCode, explainCode, analyzeHotspotFile, testApiKey, generateWithProvider, explainWithProvider } from "./gemini";
 import passport from 'passport';
 import { GitHubService } from "./github";
+import { storage } from './storage';
 import { GitLabService } from "./gitlab";
 import { BitbucketService } from "./bitbucket";
 import { AgentSystem } from "./agent";
@@ -45,11 +46,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }, express.static ? express.static(uploadsDir) : (req, res) => res.status(404).end());
 
   // Multer setup for handling file uploads
-  const storage = multer.diskStorage({
+  const multerStorage = multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, uploadsDir),
     filename: (_req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`),
   });
-  const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB limit
+  const upload = multer({ storage: multerStorage, limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB limit
 
   // Helper: transcribe audio file using OpenAI Whisper (if available)
   async function transcribeFileWithOpenAI(filePath: string, apiKey?: string) {
@@ -279,6 +280,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin-check middleware
+  function requireAdmin(req: any, res: any, next: any) {
+    try {
+      if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+      const uid = (req.user as any).id;
+      // storage may be async
+      storage.getUser(uid).then((u) => {
+        if (!u || (u as any).role !== 'admin') return res.status(403).json({ error: 'Admin required' });
+        next();
+      }).catch((e) => {
+        console.error('requireAdmin error', e);
+        res.status(500).json({ error: 'Failed to verify admin' });
+      });
+    } catch (e) {
+      console.error('requireAdmin exception', e);
+      res.status(500).json({ error: 'Admin check failed' });
+    }
+  }
+
+  // Snyk trigger (admin only)
+  app.post('/api/metrics/run-snyk', requireAdmin, async (req, res) => {
+    try {
+      const { exec } = await import('child_process');
+      const cmd = 'node ./scripts/run-snyk.js';
+      exec(cmd, { cwd: process.cwd(), env: process.env }, (err, stdout, stderr) => {
+        if (err) {
+          console.error('run-snyk error', err, stderr);
+          return res.status(500).json({ success: false, error: 'Snyk scan failed' });
+        }
+        return res.json({ success: true, output: stdout });
+      });
+    } catch (err) {
+      console.error('/api/metrics/run-snyk error', err);
+      res.status(500).json({ success: false, error: 'Failed to start Snyk scan' });
+    }
+  });
+
   // Authentication routes
   app.get('/auth/github', passport.authenticate('github', { scope: ['user:email'] }));
   app.get('/auth/github/callback', passport.authenticate('github', { failureRedirect: '/?auth=fail' }), (req, res) => {
@@ -331,6 +369,144 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error('Actions runs error', err);
       res.status(500).json({ error: 'Failed to fetch workflow runs' });
+    }
+  });
+
+  // GitHub webhook receiver to persist workflow_run events (configure webhook to point here)
+  app.post('/api/github/webhook', express.json(), async (req, res) => {
+    try {
+      const event = req.headers['x-github-event'] as string | undefined;
+      if (!event) return res.status(400).json({ error: 'Missing X-GitHub-Event header' });
+
+      if (event === 'workflow_run') {
+        const payload = req.body;
+        const owner = payload?.repository?.owner?.login || payload?.repository?.owner?.name;
+        const repo = payload?.repository?.name;
+        const run = payload?.workflow_run || payload;
+        if (!owner || !repo || !run) return res.status(400).json({ error: 'Invalid payload' });
+        await storage.saveWorkflowRuns(owner, repo, [run]);
+        return res.json({ success: true });
+      }
+
+      // For other events, return 204
+      res.status(204).end();
+    } catch (err) {
+      console.error('github webhook error', err);
+      res.status(500).json({ error: 'Webhook processing failed' });
+    }
+  });
+
+  // Persist workflow runs (accepts { runs: [...] } or array body) — stores into DB or memory
+  app.post('/api/github/actions/:owner/:repo/runs/persist', async (req, res) => {
+    try {
+      const { owner, repo } = req.params;
+      const runs = Array.isArray(req.body) ? req.body : (req.body.runs || []);
+      if (!runs || runs.length === 0) return res.status(400).json({ error: 'No runs provided' });
+      await storage.saveWorkflowRuns(owner, repo, runs);
+      res.json({ success: true, inserted: runs.length });
+    } catch (err) {
+      console.error('persist runs error', err);
+      res.status(500).json({ error: 'Failed to persist runs' });
+    }
+  });
+
+  // Simple auth guard for routes that require a logged-in user
+  function ensureAuth(req: any, res: any, next: any) {
+    if (req.user) return next();
+    // Support passport's isAuthenticated if present
+    if (typeof req.isAuthenticated === 'function' && req.isAuthenticated()) return next();
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  // Projects API for App Builder
+  app.post('/api/projects', ensureAuth, express.json(), async (req, res) => {
+    const user = (req as any).user || null;
+    const { name, description, repoUrl, public: isPublic, metadata } = req.body || {};
+    if (!name) return res.status(400).json({ error: 'name required' });
+    try {
+      const project = await storage.createProject(user?.id || null, name, description, repoUrl, metadata);
+      if (typeof isPublic === 'boolean') await storage.updateProject(project.id, { public: isPublic });
+      res.json({ project });
+    } catch (err: any) {
+      console.error('create project failed', err?.message || err);
+      res.status(500).json({ error: err?.message || 'create failed' });
+    }
+  });
+
+  app.get('/api/projects', async (req, res) => {
+    const { ownerId, publicOnly } = req.query as any;
+    try {
+      const projects = await storage.listProjects({ ownerId, publicOnly: publicOnly === 'true' });
+      res.json({ projects });
+    } catch (err: any) {
+      console.error('list projects failed', err?.message || err);
+      res.status(500).json({ error: err?.message || 'list failed' });
+    }
+  });
+
+  app.get('/api/projects/:id', async (req, res) => {
+    try {
+      const project = await storage.getProject(req.params.id);
+      if (!project) return res.status(404).json({ error: 'not found' });
+      res.json({ project });
+    } catch (err: any) {
+      console.error('get project failed', err?.message || err);
+      res.status(500).json({ error: err?.message || 'get failed' });
+    }
+  });
+
+  // Dev-only: seed a sample project (only when not in production)
+  app.post('/api/projects/seed', async (req, res) => {
+    if (process.env.NODE_ENV === 'production') return res.status(403).json({ error: 'Not allowed in production' });
+    try {
+      const demo = await storage.createProject(null, 'Demo Project', 'Automatically created demo project', null, { demo: true });
+      res.json({ project: demo });
+    } catch (err: any) {
+      console.error('seed project failed', err?.message || err);
+      res.status(500).json({ error: err?.message || 'seed failed' });
+    }
+  });
+
+  app.put('/api/projects/:id', ensureAuth, express.json(), async (req, res) => {
+    const { id } = req.params;
+    const updates = req.body || {};
+    try {
+      const project = await storage.getProject(id);
+      if (!project) return res.status(404).json({ error: 'not found' });
+      const user = (req as any).user;
+      if (project.owner_id !== user?.id && !(user as any)?.isAdmin) return res.status(403).json({ error: 'forbidden' });
+      const updated = await storage.updateProject(id, updates);
+      res.json({ project: updated });
+    } catch (err: any) {
+      console.error('update project failed', err?.message || err);
+      res.status(500).json({ error: err?.message || 'update failed' });
+    }
+  });
+
+  app.delete('/api/projects/:id', ensureAuth, async (req, res) => {
+    const { id } = req.params;
+    try {
+      const project = await storage.getProject(id);
+      if (!project) return res.status(404).json({ error: 'not found' });
+      const user = (req as any).user;
+      if (project.owner_id !== user?.id && !(user as any)?.isAdmin) return res.status(403).json({ error: 'forbidden' });
+      await storage.deleteProject(id);
+      res.json({ ok: true });
+    } catch (err: any) {
+      console.error('delete project failed', err?.message || err);
+      res.status(500).json({ error: err?.message || 'delete failed' });
+    }
+  });
+
+  app.get('/api/github/actions/:owner/:repo/runs/persisted', async (req, res) => {
+    try {
+      const { owner, repo } = req.params;
+      const limit = parseInt(req.query.limit as any) || 50;
+      const runs = await storage.getWorkflowRuns(owner, repo, limit);
+      res.json({ runs });
+    } catch (err) {
+      console.error('get persisted runs error', err);
+      res.status(500).json({ error: 'Failed to load persisted runs' });
     }
   });
 
@@ -738,6 +914,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         error: error instanceof Error ? error.message : "Failed to run agent task",
       });
+    }
+  });
+
+  // Notifications: create and list
+  app.post('/api/notifications', async (req, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+      const { type, payload, userId } = req.body;
+      if (!type) return res.status(400).json({ error: 'type is required' });
+      const uid = userId || (req.user as any).id;
+      const note = await storage.createNotification(uid, type, payload || {});
+      res.json(note);
+    } catch (err) {
+      console.error('create notification error', err);
+      res.status(500).json({ error: 'Failed to create notification' });
+    }
+  });
+
+  app.get('/api/notifications', async (req, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+      const uid = (req.user as any).id;
+      const notes = await storage.getNotificationsForUser(uid);
+      res.json(notes);
+    } catch (err) {
+      console.error('list notifications error', err);
+      res.status(500).json({ error: 'Failed to list notifications' });
+    }
+  });
+
+  // Analyze a failed CI run using AI: returns a short analysis (requires login)
+  app.post('/api/ci/analyze-failure', async (req, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+      const run = req.body.run || req.body;
+      if (!run) return res.status(400).json({ error: 'run object required' });
+
+      const prompt = `You are an expert CI engineer. Analyze this failed workflow run and provide a concise summary of likely causes and recommended next steps.\n\nRun JSON:\n${JSON.stringify(run, null, 2)}`;
+
+      let analysis = 'AI provider not configured';
+      try {
+        if (process.env.OPENAI_API_KEY) {
+          analysis = await generateWithProvider(prompt, 'generate', { provider: 'openai', apiKey: process.env.OPENAI_API_KEY });
+        } else {
+          analysis = 'No AI key configured (OPENAI_API_KEY)';
+        }
+      } catch (e) {
+        console.error('analyze-failure AI error', e);
+        analysis = 'AI analysis failed';
+      }
+
+      res.json({ analysis });
+    } catch (err) {
+      console.error('ci analyze error', err);
+      res.status(500).json({ error: 'Failed to analyze run' });
     }
   });
 

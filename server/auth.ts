@@ -31,7 +31,7 @@ export function configurePassport() {
       clientSecret: githubSecret,
       callbackURL: githubCallback,
       scope: ['user:email'],
-    }, async (accessToken, refreshToken, profile, done) => {
+    }, async (accessToken: string, refreshToken: string, profile: any, done: (err: any, user?: any) => void) => {
       try {
         const username = profile.username || profile.displayName || profile.id;
         const email = profile.emails && profile.emails[0] ? profile.emails[0].value : undefined;
@@ -59,7 +59,7 @@ export function configurePassport() {
       clientID: googleId,
       clientSecret: googleSecret,
       callbackURL: googleCallback,
-    }, async (accessToken, refreshToken, profile, done) => {
+    }, async (accessToken: string, refreshToken: string, profile: any, done: (err: any, user?: any) => void) => {
       try {
         const email = profile.emails && profile.emails[0] ? profile.emails[0].value : undefined;
         const username = profile.displayName || (email ? email.split('@')[0] : profile.id);

@@ -12,6 +12,8 @@ import Copilot from "@/pages/copilot";
 import Agent from "@/pages/agent";
 import Explain from "@/pages/explain";
 import Dashboard from "@/pages/dashboard";
+import AppBuilder from "@/pages/app-builder";
+import Playground from "@/pages/playground";
 import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
@@ -21,6 +23,8 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/copilot" component={Copilot} />
       <Route path="/agent" component={Agent} />
+      <Route path="/app-builder" component={AppBuilder} />
+      <Route path="/playground" component={Playground} />
       <Route path="/explain" component={Explain} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/settings" component={Settings} />
