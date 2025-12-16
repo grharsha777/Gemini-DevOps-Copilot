@@ -459,7 +459,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/projects/seed', async (req, res) => {
     if (process.env.NODE_ENV === 'production') return res.status(403).json({ error: 'Not allowed in production' });
     try {
-      const demo = await storage.createProject(null, 'Demo Project', 'Automatically created demo project', null, { demo: true });
+      const demo = await (storage as any).createProject(null, 'Demo Project', 'Automatically created demo project', null, { demo: true });
       res.json({ project: demo });
     } catch (err: any) {
       console.error('seed project failed', err?.message || err);
@@ -514,7 +514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = req.params.id;
       // path comes after /files/
-      const p = req.params[0];
+      const p = (req.params as any)[0];
       const file = await storage.getProjectFile(id, p);
       if (!file) return res.status(404).json({ error: 'not found' });
       res.json({ file });
