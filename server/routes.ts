@@ -271,10 +271,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { owner, repo } = req.params;
+      const days = parseInt(req.query.days as string) || 7;
       const github = new GitHubService(token);
 
       const [commitActivity, prStatus, openIssues, hotspots] = await Promise.all([
-        github.getCommitActivity(owner, repo, 7),
+        github.getCommitActivity(owner, repo, days),
         github.getPRStatus(owner, repo),
         github.getOpenIssues(owner, repo),
         github.getHotspotFiles(owner, repo),
@@ -443,7 +444,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const data = schema.parse(req.body);
 
-      const agent = new AgentSystem(data.fastConfig, data.proConfig);
+      const fastConfig = data.fastConfig ? {
+        provider: data.fastConfig.provider as AIProvider,
+        apiKey: data.fastConfig.apiKey,
+        model: data.fastConfig.model,
+        baseUrl: data.fastConfig.baseUrl,
+      } : null;
+
+      const proConfig = data.proConfig ? {
+        provider: data.proConfig.provider as AIProvider,
+        apiKey: data.proConfig.apiKey,
+        model: data.proConfig.model,
+        baseUrl: data.proConfig.baseUrl,
+      } : null;
+
+      const agent = new AgentSystem(fastConfig, proConfig);
       const result = await agent.runTask({
         task: data.task,
         action: data.action,

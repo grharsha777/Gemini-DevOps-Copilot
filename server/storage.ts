@@ -1,5 +1,16 @@
-import { type User, type InsertUser } from "@shared/schema";
 import { randomUUID } from "crypto";
+
+// User type definitions (if not in schema)
+export interface User {
+  id: string;
+  username: string;
+  email?: string;
+}
+
+export interface InsertUser {
+  username: string;
+  email?: string;
+}
 
 // modify the interface with any CRUD methods
 // you might need
