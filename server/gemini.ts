@@ -45,6 +45,8 @@ function getDefaultModel(provider: AIProvider): string {
       return "deepseek-chat";
     case "openrouter":
       return "openai/gpt-4o-mini";
+    case "huggingface":
+      return "meta-llama/Llama-3.1-8B-Instruct";
     default:
       return "gpt-3.5-turbo";
   }
@@ -147,6 +149,21 @@ export async function testApiKey(config: ProviderConfig): Promise<{ success: boo
         });
         await openrouter.chat.completions.create({
           model: model || "openai/gpt-4o-mini",
+          messages: [{ role: "user", content: testPrompt }],
+          max_tokens: 10,
+        });
+        return { success: true };
+      }
+
+      case "huggingface": {
+        // Hugging Face uses OpenAI-compatible Inference API
+        // Base URL format: https://api-inference.huggingface.co/v1
+        const huggingface = new OpenAI({
+          apiKey: apiKey.trim(),
+          baseURL: baseUrl || "https://api-inference.huggingface.co/v1",
+        });
+        await huggingface.chat.completions.create({
+          model: model || "meta-llama/Llama-3.1-8B-Instruct",
           messages: [{ role: "user", content: testPrompt }],
           max_tokens: 10,
         });
@@ -333,6 +350,22 @@ export async function generateWithProvider(
         baseURL: "https://openrouter.ai/api/v1",
       });
       const completion = await openrouter.chat.completions.create({
+        model: modelToUse,
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: prompt },
+        ],
+      });
+      return completion.choices[0].message.content || "No response";
+    }
+
+    case "huggingface": {
+      // Hugging Face Inference API (OpenAI-compatible)
+      const huggingface = new OpenAI({
+        apiKey,
+        baseURL: baseUrl || "https://api-inference.huggingface.co/v1",
+      });
+      const completion = await huggingface.chat.completions.create({
         model: modelToUse,
         messages: [
           { role: "system", content: systemInstruction },

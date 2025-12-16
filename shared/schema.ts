@@ -42,6 +42,7 @@ export const aiProviderSchema = z.enum([
   "anthropic",   // Claude
   "deepseek",    // DeepSeek
   "openrouter",  // OpenRouter (access to many models)
+  "huggingface", // Hugging Face Inference API
   "custom",      // Custom OpenAI-compatible endpoint
 ]);
 
@@ -110,6 +111,12 @@ export const providerInfoMap: Record<AIProvider, {
     url: "https://openrouter.ai/keys",
     models: ["openai/gpt-4o", "anthropic/claude-3.5-sonnet", "meta-llama/llama-3.1-70b-instruct"],
     note: "Access to multiple models through one API. Unified interface for many LLMs.",
+  },
+  huggingface: {
+    name: "Hugging Face",
+    url: "https://huggingface.co/settings/tokens",
+    models: ["meta-llama/Llama-3.1-8B-Instruct", "mistralai/Mistral-7B-Instruct-v0.2", "google/gemma-2-9b-it", "Qwen/Qwen2.5-7B-Instruct"],
+    note: "Open-source models via Inference API. Free tier available. Great for experimentation with open models.",
   },
   custom: {
     name: "Custom API",
