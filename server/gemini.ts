@@ -61,6 +61,7 @@ export async function testApiKey(config: ProviderConfig): Promise<{ success: boo
   }
 
   console.log(`[testApiKey] Testing ${provider} with model ${model || "default"}`);
+  console.log(`[testApiKey] API key length: ${apiKey.length}, starts with: ${apiKey.substring(0, 10)}...`);
 
   try {
     switch (provider) {
@@ -101,12 +102,28 @@ export async function testApiKey(config: ProviderConfig): Promise<{ success: boo
       }
 
       case "anthropic": {
-        const anthropic = new Anthropic({ apiKey });
-        await anthropic.messages.create({
-          model: model || "claude-3-haiku-20240307",
+        // Validate API key format for Anthropic (should start with sk-ant-)
+        if (!apiKey.startsWith("sk-ant-")) {
+          console.warn(`[anthropic] API key format warning: key doesn't start with 'sk-ant-'`);
+        }
+        
+        const anthropic = new Anthropic({ 
+          apiKey: apiKey.trim(),
+          timeout: 30000, // 30 second timeout
+        });
+        
+        const response = await anthropic.messages.create({
+          model: model || "claude-3-5-sonnet-20241022",
           max_tokens: 10,
           messages: [{ role: "user", content: testPrompt }],
         });
+        
+        // Verify we got a response
+        if (!response || !response.content || response.content.length === 0) {
+          return { success: false, error: "No response from Claude API" };
+        }
+        
+        console.log(`[anthropic] API test successful, response received`);
         return { success: true };
       }
 
@@ -170,18 +187,23 @@ export async function testApiKey(config: ProviderConfig): Promise<{ success: boo
     let errorMessage = "API key validation failed";
     
     // Try to extract error message from various error formats
-    if (error?.response?.data?.error?.message) {
+    // Anthropic SDK specific error format
+    if (error?.error?.message) {
+      errorMessage = error.error.message;
+    } else if (error?.error?.type) {
+      errorMessage = `${error.error.type}: ${error.error.message || "Unknown error"}`;
+    } else if (error?.response?.data?.error?.message) {
       errorMessage = error.response.data.error.message;
     } else if (error?.response?.data?.error) {
       errorMessage = typeof error.response.data.error === "string" 
         ? error.response.data.error 
         : JSON.stringify(error.response.data.error);
-    } else if (error?.error?.message) {
-      errorMessage = error.error.message;
     } else if (error?.message) {
       errorMessage = error.message;
     } else if (error?.statusText) {
       errorMessage = error.statusText;
+    } else if (error?.status) {
+      errorMessage = `HTTP ${error.status}: ${error.statusText || "Request failed"}`;
     } else if (typeof error === "string") {
       errorMessage = error;
     } else if (error?.toString) {
@@ -190,20 +212,22 @@ export async function testApiKey(config: ProviderConfig): Promise<{ success: boo
     
     // Check for common error types and provide user-friendly messages
     const lowerMessage = errorMessage.toLowerCase();
-    if (lowerMessage.includes("401") || lowerMessage.includes("unauthorized") || lowerMessage.includes("invalid api key")) {
+    if (lowerMessage.includes("401") || lowerMessage.includes("unauthorized") || lowerMessage.includes("invalid api key") || lowerMessage.includes("authentication_error")) {
       errorMessage = "Invalid API key. Please check your API key and try again. Make sure you copied the entire key correctly.";
-    } else if (lowerMessage.includes("403") || lowerMessage.includes("forbidden")) {
+    } else if (lowerMessage.includes("403") || lowerMessage.includes("forbidden") || lowerMessage.includes("permission_error")) {
       errorMessage = "API key does not have permission. Please check your API key permissions in your provider's dashboard.";
-    } else if (lowerMessage.includes("429") || lowerMessage.includes("rate limit") || lowerMessage.includes("quota")) {
+    } else if (lowerMessage.includes("429") || lowerMessage.includes("rate limit") || lowerMessage.includes("quota") || lowerMessage.includes("rate_limit_error")) {
       errorMessage = "Rate limit or quota exceeded. Please check your account limits and try again later.";
-    } else if (lowerMessage.includes("model") || lowerMessage.includes("not found")) {
+    } else if (lowerMessage.includes("model") || lowerMessage.includes("not found") || lowerMessage.includes("invalid_model")) {
       errorMessage = `Model error: ${errorMessage}. Please check if the model name "${model || "default"}" is correct for ${provider}.`;
-    } else if (lowerMessage.includes("network") || lowerMessage.includes("fetch") || lowerMessage.includes("econnrefused")) {
-      errorMessage = "Network error. Please check your internet connection and try again.";
-    } else if (lowerMessage.includes("timeout")) {
-      errorMessage = "Request timed out. Please try again.";
-    } else if (lowerMessage.includes("api key") || lowerMessage.includes("authentication")) {
-      errorMessage = `Authentication failed: ${errorMessage}. Please verify your API key is correct.`;
+    } else if (lowerMessage.includes("network") || lowerMessage.includes("fetch") || lowerMessage.includes("econnrefused") || lowerMessage.includes("econnreset") || lowerMessage.includes("enotfound") || lowerMessage.includes("getaddrinfo")) {
+      errorMessage = "Network/Connection error. Please check your internet connection, firewall settings, and try again. If using VPN, try disabling it.";
+    } else if (lowerMessage.includes("timeout") || lowerMessage.includes("timed out")) {
+      errorMessage = "Request timed out. The API server may be slow or unreachable. Please try again.";
+    } else if (lowerMessage.includes("api key") || lowerMessage.includes("authentication") || lowerMessage.includes("invalid_api_key")) {
+      errorMessage = `Authentication failed: ${errorMessage}. Please verify your API key is correct and active.`;
+    } else if (lowerMessage.includes("connection") || lowerMessage.includes("connect") || lowerMessage.includes("econn")) {
+      errorMessage = `Connection error: ${errorMessage}. Please check your internet connection and firewall settings.`;
     }
     
     return { success: false, error: errorMessage };
@@ -273,7 +297,10 @@ export async function generateWithProvider(
     }
 
     case "anthropic": {
-      const anthropic = new Anthropic({ apiKey });
+      const anthropic = new Anthropic({ 
+        apiKey,
+        timeout: 60000, // 60 second timeout for generation
+      });
       const response = await anthropic.messages.create({
         model: modelToUse,
         max_tokens: 8192,
