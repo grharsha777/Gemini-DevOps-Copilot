@@ -10,6 +10,17 @@ export const chatMessageSchema = z.object({
 
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 
+// Chat History Session
+export const chatSessionSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  messages: z.array(chatMessageSchema),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
+export type ChatSession = z.infer<typeof chatSessionSchema>;
+
 // AI Generation Modes
 export const aiModeSchema = z.enum([
   "generate",
@@ -22,10 +33,91 @@ export const aiModeSchema = z.enum([
 
 export type AIMode = z.infer<typeof aiModeSchema>;
 
-// AI Models
-export const aiModelSchema = z.enum(["gemini-2.0-flash-exp", "gemini-1.5-pro"]);
+// AI Providers - Supports any OpenAI-compatible API + specific providers
+export const aiProviderSchema = z.enum([
+  "gemini",      // Google Gemini
+  "openai",      // OpenAI GPT models
+  "mistral",     // Mistral AI
+  "groq",        // Groq (Llama, Mixtral)
+  "anthropic",   // Claude
+  "deepseek",    // DeepSeek
+  "openrouter",  // OpenRouter (access to many models)
+  "custom",      // Custom OpenAI-compatible endpoint
+]);
+
+export type AIProvider = z.infer<typeof aiProviderSchema>;
+
+// Provider configuration with API endpoint info
+export const providerConfigSchema = z.object({
+  provider: aiProviderSchema,
+  apiKey: z.string(),
+  model: z.string().optional(),
+  baseUrl: z.string().optional(), // For custom endpoints
+});
+
+export type ProviderConfig = z.infer<typeof providerConfigSchema>;
+
+// AI Models (for backward compatibility)
+export const aiModelSchema = z.enum(["fast", "pro"]);
 
 export type AIModel = z.infer<typeof aiModelSchema>;
+
+// Provider info for UI display with helpful notes
+export const providerInfoMap: Record<AIProvider, { 
+  name: string; 
+  url: string; 
+  models: string[];
+  note: string; // Short note about the provider
+}> = {
+  gemini: {
+    name: "Google Gemini",
+    url: "https://aistudio.google.com/app/apikey",
+    models: ["gemini-2.0-flash-exp", "gemini-1.5-pro", "gemini-1.5-flash"],
+    note: "Free tier available. Great for general coding tasks. Fast and reliable.",
+  },
+  openai: {
+    name: "OpenAI",
+    url: "https://platform.openai.com/api-keys",
+    models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
+    note: "Industry standard. GPT-4o is powerful for complex tasks. Pay-as-you-go pricing.",
+  },
+  mistral: {
+    name: "Mistral AI",
+    url: "https://console.mistral.ai/api-keys",
+    models: ["codestral-latest", "mistral-large-latest", "mistral-small-latest"],
+    note: "Excellent for code generation. Codestral is specialized for coding. Competitive pricing.",
+  },
+  groq: {
+    name: "Groq",
+    url: "https://console.groq.com/keys",
+    models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
+    note: "Ultra-fast inference speed. Free tier available. Great for fast responses.",
+  },
+  anthropic: {
+    name: "Anthropic Claude",
+    url: "https://console.anthropic.com/settings/keys",
+    models: ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"],
+    note: "Excellent reasoning capabilities. Claude 3.5 Sonnet is great for complex problems.",
+  },
+  deepseek: {
+    name: "DeepSeek",
+    url: "https://platform.deepseek.com/api_keys",
+    models: ["deepseek-chat", "deepseek-coder"],
+    note: "Cost-effective option. DeepSeek Coder is optimized for programming tasks.",
+  },
+  openrouter: {
+    name: "OpenRouter",
+    url: "https://openrouter.ai/keys",
+    models: ["openai/gpt-4o", "anthropic/claude-3.5-sonnet", "meta-llama/llama-3.1-70b-instruct"],
+    note: "Access to multiple models through one API. Unified interface for many LLMs.",
+  },
+  custom: {
+    name: "Custom API",
+    url: "",
+    models: [],
+    note: "Use any OpenAI-compatible API endpoint. Enter your custom base URL.",
+  },
+};
 
 // GitHub Repository
 export const githubRepoSchema = z.object({
@@ -102,8 +194,18 @@ export type CodeExplanationLine = z.infer<typeof codeExplanationLineSchema>;
 export const userSettingsSchema = z.object({
   githubPat: z.string().optional(),
   selectedRepo: z.string().optional(),
-  aiModel: aiModelSchema,
   theme: z.enum(["light", "dark"]),
+  // Fast model configuration (for quick responses)
+  fastProvider: aiProviderSchema.optional(),
+  fastApiKey: z.string().optional(),
+  fastModel: z.string().optional(),
+  fastBaseUrl: z.string().optional(),
+  // Pro model configuration (for advanced/complex tasks)
+  proProvider: aiProviderSchema.optional(),
+  proApiKey: z.string().optional(),
+  proModel: z.string().optional(),
+  proBaseUrl: z.string().optional(),
 });
 
 export type UserSettings = z.infer<typeof userSettingsSchema>;
+

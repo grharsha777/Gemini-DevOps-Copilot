@@ -8,18 +8,54 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FileText, AlertTriangle, Zap, Shield, Sparkles } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { CodeExplanationLine } from "@shared/schema";
+import type { CodeExplanationLine, AIProvider } from "@shared/schema";
 
 export default function Explain() {
   const [code, setCode] = useState("");
   const [explanations, setExplanations] = useState<CodeExplanationLine[]>([]);
   const { toast } = useToast();
 
+  // Get API configuration (prefer pro for explanations, fallback to fast)
+  const getApiConfig = () => {
+    const proProvider = localStorage.getItem("proProvider") as AIProvider | null;
+    const proApiKey = localStorage.getItem("proApiKey") || "";
+    const proModel = localStorage.getItem("proModel") || "";
+    const proBaseUrl = localStorage.getItem("proBaseUrl") || "";
+
+    if (proProvider && proApiKey) {
+      return { provider: proProvider, apiKey: proApiKey, model: proModel, baseUrl: proBaseUrl };
+    }
+
+    // Fallback to fast
+    const fastProvider = localStorage.getItem("fastProvider") as AIProvider | null;
+    const fastApiKey = localStorage.getItem("fastApiKey") || "";
+    const fastModel = localStorage.getItem("fastModel") || "";
+    const fastBaseUrl = localStorage.getItem("fastBaseUrl") || "";
+
+    if (fastProvider && fastApiKey) {
+      return { provider: fastProvider, apiKey: fastApiKey, model: fastModel, baseUrl: fastBaseUrl };
+    }
+
+    return null;
+  };
+
   const explainMutation = useMutation({
     mutationFn: async (codeText: string) => {
-      const response = await apiRequest("POST", "/api/ai/explain", {
+      const apiConfig = getApiConfig();
+      
+      const requestBody: any = {
         code: codeText,
-      });
+      };
+
+      // If user has configured API keys, use them
+      if (apiConfig) {
+        requestBody.provider = apiConfig.provider;
+        requestBody.apiKey = apiConfig.apiKey;
+        if (apiConfig.model) requestBody.model = apiConfig.model;
+        if (apiConfig.baseUrl) requestBody.baseUrl = apiConfig.baseUrl;
+      }
+
+      const response = await apiRequest("POST", "/api/ai/explain", requestBody);
       const data = await response.json();
       return data as { explanations: CodeExplanationLine[] };
     },
@@ -27,9 +63,12 @@ export default function Explain() {
       setExplanations(data.explanations);
     },
     onError: (error) => {
+      const errorMessage = error instanceof Error ? error.message : "Failed to explain code";
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to explain code",
+        description: errorMessage.includes("API key") 
+          ? "Please configure your API keys in Settings first."
+          : errorMessage,
         variant: "destructive",
       });
     },
@@ -75,6 +114,16 @@ export default function Explain() {
 
       <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
+          {!getApiConfig() && (
+            <Card className="p-4 bg-destructive/10 border-destructive/20">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-destructive">
+                  No API keys configured. Please go to <strong>Settings</strong> to add your AI provider API keys.
+                </p>
+              </div>
+            </Card>
+          )}
           <Card className="p-4 bg-card/80 backdrop-blur-sm">
             <h3 className="font-semibold mb-2 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-primary" />

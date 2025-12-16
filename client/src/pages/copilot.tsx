@@ -7,19 +7,33 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Send, Sparkles, Code, TestTube, FileText, RefreshCw, Copy, Check } from "lucide-react";
+import { Send, Sparkles, Code, TestTube, FileText, RefreshCw, Copy, Check, AlertCircle } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { ChatMessage, AIMode, AIModel } from "@shared/schema";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import type { ChatMessage, AIMode, AIModel, AIProvider } from "@shared/schema";
 
 export default function Copilot() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<AIMode>("generate");
-  const [model, setModel] = useState<AIModel>("gemini-2.0-flash-exp");
+  const [modelTier, setModelTier] = useState<"fast" | "pro">("fast");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  // Load API key configuration from localStorage
+  const getApiConfig = (tier: "fast" | "pro") => {
+    const provider = localStorage.getItem(`${tier}Provider`) as AIProvider | null;
+    const apiKey = localStorage.getItem(`${tier}ApiKey`) || "";
+    const model = localStorage.getItem(`${tier}Model`) || "";
+    const baseUrl = localStorage.getItem(`${tier}BaseUrl`) || "";
+
+    if (provider && apiKey) {
+      return { provider, apiKey, model, baseUrl };
+    }
+    return null;
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -39,11 +53,24 @@ export default function Copilot() {
       };
       setMessages((prev) => [...prev, userMessage]);
 
-      const response = await apiRequest("POST", "/api/ai/generate", {
+      // Get API configuration for the selected tier
+      const apiConfig = getApiConfig(modelTier);
+      
+      const requestBody: any = {
         prompt,
         mode,
-        model,
-      });
+        modelTier,
+      };
+
+      // If user has configured API keys, use them
+      if (apiConfig) {
+        requestBody.provider = apiConfig.provider;
+        requestBody.apiKey = apiConfig.apiKey;
+        if (apiConfig.model) requestBody.model = apiConfig.model;
+        if (apiConfig.baseUrl) requestBody.baseUrl = apiConfig.baseUrl;
+      }
+
+      const response = await apiRequest("POST", "/api/ai/generate", requestBody);
       const data = await response.json();
       return data as { text: string };
     },
@@ -58,9 +85,12 @@ export default function Copilot() {
       setInput("");
     },
     onError: (error) => {
+      const errorMessage = error instanceof Error ? error.message : "Failed to generate response";
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to generate response",
+        description: errorMessage.includes("API key") 
+          ? "Please configure your API keys in Settings first."
+          : errorMessage,
         variant: "destructive",
       });
     },
@@ -103,14 +133,14 @@ export default function Copilot() {
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Model:</span>
-              <Select value={model} onValueChange={(v) => setModel(v as AIModel)}>
+              <span className="text-sm text-muted-foreground">Model Tier:</span>
+              <Select value={modelTier} onValueChange={(v) => setModelTier(v as "fast" | "pro")}>
                 <SelectTrigger className="w-40" data-testid="select-model">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gemini-2.0-flash-exp">Flash (Fast)</SelectItem>
-                  <SelectItem value="gemini-1.5-pro">Pro (Advanced)</SelectItem>
+                  <SelectItem value="fast">⚡ Fast</SelectItem>
+                  <SelectItem value="pro">👑 Pro</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -144,6 +174,17 @@ export default function Copilot() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        {/* Show warning if no API keys configured */}
+        {!getApiConfig("fast") && !getApiConfig("pro") && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              No API keys configured. Please go to <strong>Settings</strong> to add your AI provider API keys.
+              You need at least one API key (Fast or Pro) to use AI features.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
             <div className="w-16 h-16 bg-gradient-to-br from-primary/20 to-purple-500/20 rounded-2xl flex items-center justify-center">
@@ -154,6 +195,11 @@ export default function Copilot() {
               <p className="text-sm text-muted-foreground max-w-md">
                 Ask me to generate code, write tests, create documentation, or refactor existing code. I'm here to help!
               </p>
+              {!getApiConfig(modelTier) && (
+                <p className="text-xs text-destructive mt-2">
+                  ⚠️ {modelTier === "fast" ? "Fast" : "Pro"} model API key not configured. Please add it in Settings.
+                </p>
+              )}
             </div>
           </div>
         )}
