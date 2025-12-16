@@ -3,7 +3,27 @@ import { createServer, type Server } from "http";
 import { z } from "zod";
 import { generateCode, explainCode, analyzeHotspotFile, testApiKey, generateWithProvider, explainWithProvider } from "./gemini";
 import { GitHubService } from "./github";
-import type { AIProvider } from "@shared/schema";
+import { GitLabService } from "./gitlab";
+import { BitbucketService } from "./bitbucket";
+import type { AIProvider, GitProvider } from "@shared/schema";
+
+// Helper function to get the appropriate Git service
+function getGitService(
+  provider: GitProvider,
+  token: string,
+  options?: {
+    instanceUrl?: string;
+  }
+): GitHubService | GitLabService {
+  switch (provider) {
+    case "github":
+      return new GitHubService(token);
+    case "gitlab":
+      return new GitLabService(token, options?.instanceUrl || "https://gitlab.com");
+    default:
+      throw new Error(`Unsupported git provider: ${provider}`);
+  }
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Test API Key endpoint
@@ -125,7 +145,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get GitHub Repositories
+  // Get Repositories (supports GitHub, GitLab, Bitbucket)
+  app.get("/api/git/repos", async (req, res) => {
+    try {
+      const provider = (req.query.provider as GitProvider) || "github";
+      const token = req.headers.authorization?.replace("Bearer ", "");
+      
+      if (!token) {
+        return res.status(401).json({ error: "Git provider token required" });
+      }
+
+      let repos;
+      
+      switch (provider) {
+        case "github": {
+          const github = new GitHubService(token);
+          repos = await github.getRepositories();
+          break;
+        }
+        case "gitlab": {
+          const instanceUrl = req.query.instanceUrl as string || "https://gitlab.com";
+          const gitlab = new GitLabService(token, instanceUrl);
+          repos = await gitlab.getRepositories();
+          break;
+        }
+        case "bitbucket": {
+          const username = req.query.username as string;
+          const appPassword = req.query.appPassword as string;
+          if (!username || !appPassword) {
+            return res.status(400).json({ error: "Bitbucket requires username and app password" });
+          }
+          // For Bitbucket, token is the username
+          const bitbucket = new BitbucketService(username, appPassword);
+          repos = await bitbucket.getRepositories();
+          break;
+        }
+        default:
+          return res.status(400).json({ error: "Unsupported git provider" });
+      }
+
+      res.json(repos);
+    } catch (error) {
+      console.error("Repos error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to fetch repositories",
+      });
+    }
+  });
+
+  // Legacy GitHub endpoint for backward compatibility
   app.get("/api/github/repos", async (req, res) => {
     try {
       const token = req.headers.authorization?.replace("Bearer ", "");
@@ -145,7 +213,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get Dashboard Summary
+  // Get Dashboard Summary (supports all Git providers)
+  app.get("/api/git/summary/:owner/:repo", async (req, res) => {
+    try {
+      const provider = (req.query.provider as GitProvider) || "github";
+      const token = req.headers.authorization?.replace("Bearer ", "");
+      if (!token) {
+        return res.status(401).json({ error: "Git provider token required" });
+      }
+
+      const { owner, repo } = req.params;
+      let service: GitHubService | GitLabService | BitbucketService;
+      if (provider === "bitbucket") {
+        const username = req.query.username as string;
+        const appPassword = req.query.appPassword as string;
+        if (!username || !appPassword) {
+          return res.status(400).json({ error: "Bitbucket requires username and app password" });
+        }
+        service = new BitbucketService(username, appPassword);
+      } else {
+        service = getGitService(provider, token, {
+          instanceUrl: req.query.instanceUrl as string,
+        });
+      }
+
+      const [commitActivity, prStatus, openIssues, hotspots] = await Promise.all([
+        service.getCommitActivity(owner, repo, 7),
+        service.getPRStatus(owner, repo),
+        service.getOpenIssues(owner, repo),
+        service.getHotspotFiles(owner, repo),
+      ]);
+
+      const totalCommits = commitActivity.reduce((sum, day) => sum + day.count, 0);
+
+      res.json({
+        totalCommits,
+        prStatus,
+        openIssues,
+        hotspotCount: hotspots.length,
+      });
+    } catch (error) {
+      console.error("Summary error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to fetch summary",
+      });
+    }
+  });
+
+  // Legacy GitHub endpoint for backward compatibility
   app.get("/api/github/summary/:owner/:repo", async (req, res) => {
     try {
       const token = req.headers.authorization?.replace("Bearer ", "");

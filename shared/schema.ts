@@ -190,9 +190,51 @@ export const codeExplanationLineSchema = z.object({
 
 export type CodeExplanationLine = z.infer<typeof codeExplanationLineSchema>;
 
+// Git Providers
+export const gitProviderSchema = z.enum([
+  "github",
+  "gitlab",
+  "bitbucket",
+]);
+
+export type GitProvider = z.infer<typeof gitProviderSchema>;
+
+// Git Provider Info
+export const gitProviderInfoMap: Record<GitProvider, { 
+  name: string; 
+  url: string;
+  tokenUrl: string;
+  note: string;
+}> = {
+  github: {
+    name: "GitHub",
+    url: "https://github.com",
+    tokenUrl: "https://github.com/settings/tokens",
+    note: "Personal Access Token (PAT) with 'repo' scope",
+  },
+  gitlab: {
+    name: "GitLab",
+    url: "https://gitlab.com",
+    tokenUrl: "https://gitlab.com/-/user_settings/personal_access_tokens",
+    note: "Personal Access Token with 'api' scope. Supports self-hosted instances.",
+  },
+  bitbucket: {
+    name: "Bitbucket",
+    url: "https://bitbucket.org",
+    tokenUrl: "https://bitbucket.org/account/settings/app-passwords/",
+    note: "App Password (username + app password). Create in account settings.",
+  },
+};
+
 // User Settings (for localStorage)
 export const userSettingsSchema = z.object({
+  // Git Provider Settings
+  gitProvider: gitProviderSchema.optional(),
   githubPat: z.string().optional(),
+  gitlabToken: z.string().optional(),
+  gitlabInstanceUrl: z.string().optional(), // For self-hosted GitLab
+  bitbucketUsername: z.string().optional(),
+  bitbucketAppPassword: z.string().optional(),
   selectedRepo: z.string().optional(),
   theme: z.enum(["light", "dark"]),
   // Fast model configuration (for quick responses)

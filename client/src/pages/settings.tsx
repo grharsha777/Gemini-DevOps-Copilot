@@ -4,12 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Settings as SettingsIcon, Github, Sparkles, Eye, EyeOff, Zap, Crown, ExternalLink, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Settings as SettingsIcon, Github, Sparkles, Eye, EyeOff, Zap, Crown, ExternalLink, CheckCircle, XCircle, Loader2, GitBranch } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useTheme } from "@/components/theme-provider";
-import type { AIProvider } from "@shared/schema";
-import { providerInfoMap } from "@shared/schema";
+import type { AIProvider, GitProvider } from "@shared/schema";
+import { providerInfoMap, gitProviderInfoMap } from "@shared/schema";
 
 interface ModelConfig {
   provider: AIProvider | "";
@@ -19,8 +19,17 @@ interface ModelConfig {
 }
 
 export default function Settings() {
+  // Git Provider Settings
+  const [gitProvider, setGitProvider] = useState<GitProvider>("github");
   const [githubPat, setGithubPat] = useState("");
+  const [gitlabToken, setGitlabToken] = useState("");
+  const [gitlabInstanceUrl, setGitlabInstanceUrl] = useState("https://gitlab.com");
+  const [bitbucketUsername, setBitbucketUsername] = useState("");
+  const [bitbucketAppPassword, setBitbucketAppPassword] = useState("");
+  
   const [showPat, setShowPat] = useState(false);
+  const [showGitlabToken, setShowGitlabToken] = useState(false);
+  const [showBitbucketPassword, setShowBitbucketPassword] = useState(false);
   const [showFastKey, setShowFastKey] = useState(false);
   const [showProKey, setShowProKey] = useState(false);
   const { toast } = useToast();
@@ -50,8 +59,23 @@ export default function Settings() {
 
   useEffect(() => {
     // Load saved settings
+    const savedGitProvider = localStorage.getItem("gitProvider") as GitProvider || "github";
+    setGitProvider(savedGitProvider);
+    
     const savedPat = localStorage.getItem("githubPat") || "";
     setGithubPat(savedPat);
+    
+    const savedGitlabToken = localStorage.getItem("gitlabToken") || "";
+    setGitlabToken(savedGitlabToken);
+    
+    const savedGitlabUrl = localStorage.getItem("gitlabInstanceUrl") || "https://gitlab.com";
+    setGitlabInstanceUrl(savedGitlabUrl);
+    
+    const savedBitbucketUser = localStorage.getItem("bitbucketUsername") || "";
+    setBitbucketUsername(savedBitbucketUser);
+    
+    const savedBitbucketPass = localStorage.getItem("bitbucketAppPassword") || "";
+    setBitbucketAppPassword(savedBitbucketPass);
 
     // Load fast model config
     const savedFastProvider = localStorage.getItem("fastProvider") as AIProvider || "";
@@ -79,7 +103,13 @@ export default function Settings() {
   }, []);
 
   const handleSave = () => {
+    // Save Git provider settings
+    localStorage.setItem("gitProvider", gitProvider);
     localStorage.setItem("githubPat", githubPat);
+    localStorage.setItem("gitlabToken", gitlabToken);
+    localStorage.setItem("gitlabInstanceUrl", gitlabInstanceUrl);
+    localStorage.setItem("bitbucketUsername", bitbucketUsername);
+    localStorage.setItem("bitbucketAppPassword", bitbucketAppPassword);
 
     // Save fast config
     localStorage.setItem("fastProvider", fastConfig.provider);
@@ -413,54 +443,186 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* GitHub Integration */}
+        {/* Git Provider Integration */}
         <Card className="bg-card/80 backdrop-blur-sm border-card-border">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Github className="w-5 h-5" />
-              GitHub Integration
+              <GitBranch className="w-5 h-5" />
+              Git Provider Integration
             </CardTitle>
             <CardDescription>
-              Connect your GitHub account to access repository analytics
+              Connect your Git provider to access repository analytics. Choose your preferred provider below.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
+            {/* Provider Selection */}
             <div className="space-y-2">
-              <Label htmlFor="github-pat">Personal Access Token (PAT)</Label>
-              <div className="relative">
-                <Input
-                  id="github-pat"
-                  type={showPat ? "text" : "password"}
-                  value={githubPat}
-                  onChange={(e) => setGithubPat(e.target.value)}
-                  placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                  className="pr-10"
-                  data-testid="input-github-pat"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full"
-                  onClick={() => setShowPat(!showPat)}
-                  data-testid="button-toggle-pat"
-                >
-                  {showPat ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Generate a token at{" "}
-                <a
-                  href="https://github.com/settings/tokens"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  github.com/settings/tokens
-                </a>{" "}
-                with 'repo' scope
-              </p>
+              <Label>Select Git Provider</Label>
+              <Select value={gitProvider} onValueChange={(v) => setGitProvider(v as GitProvider)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(gitProviderInfoMap).map(([key, info]) => (
+                    <SelectItem key={key} value={key}>
+                      {info.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* GitHub Configuration */}
+            {gitProvider === "github" && (
+              <div className="p-4 rounded-lg bg-muted/50 border border-border space-y-4">
+                <div className="flex items-center gap-2">
+                  <Github className="w-5 h-5" />
+                  <h3 className="font-semibold">GitHub</h3>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="github-pat">Personal Access Token (PAT)</Label>
+                  <div className="relative">
+                    <Input
+                      id="github-pat"
+                      type={showPat ? "text" : "password"}
+                      value={githubPat}
+                      onChange={(e) => setGithubPat(e.target.value)}
+                      placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full"
+                      onClick={() => setShowPat(!showPat)}
+                    >
+                      {showPat ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {gitProviderInfoMap.github.note}. Get token at{" "}
+                    <a
+                      href={gitProviderInfoMap.github.tokenUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline flex items-center gap-1"
+                    >
+                      {gitProviderInfoMap.github.tokenUrl} <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* GitLab Configuration */}
+            {gitProvider === "gitlab" && (
+              <div className="p-4 rounded-lg bg-muted/50 border border-border space-y-4">
+                <div className="flex items-center gap-2">
+                  <GitBranch className="w-5 h-5" />
+                  <h3 className="font-semibold">GitLab</h3>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="gitlab-instance">GitLab Instance URL (optional)</Label>
+                  <Input
+                    id="gitlab-instance"
+                    type="text"
+                    value={gitlabInstanceUrl}
+                    onChange={(e) => setGitlabInstanceUrl(e.target.value)}
+                    placeholder="https://gitlab.com"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave as default for GitLab.com, or enter your self-hosted instance URL
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="gitlab-token">Personal Access Token</Label>
+                  <div className="relative">
+                    <Input
+                      id="gitlab-token"
+                      type={showGitlabToken ? "text" : "password"}
+                      value={gitlabToken}
+                      onChange={(e) => setGitlabToken(e.target.value)}
+                      placeholder="glpat-xxxxxxxxxxxxxxxxxxxx"
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full"
+                      onClick={() => setShowGitlabToken(!showGitlabToken)}
+                    >
+                      {showGitlabToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {gitProviderInfoMap.gitlab.note}. Get token at{" "}
+                    <a
+                      href={gitProviderInfoMap.gitlab.tokenUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline flex items-center gap-1"
+                    >
+                      {gitProviderInfoMap.gitlab.tokenUrl} <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Bitbucket Configuration */}
+            {gitProvider === "bitbucket" && (
+              <div className="p-4 rounded-lg bg-muted/50 border border-border space-y-4">
+                <div className="flex items-center gap-2">
+                  <GitBranch className="w-5 h-5" />
+                  <h3 className="font-semibold">Bitbucket</h3>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bitbucket-username">Username</Label>
+                  <Input
+                    id="bitbucket-username"
+                    type="text"
+                    value={bitbucketUsername}
+                    onChange={(e) => setBitbucketUsername(e.target.value)}
+                    placeholder="your-username"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bitbucket-password">App Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="bitbucket-password"
+                      type={showBitbucketPassword ? "text" : "password"}
+                      value={bitbucketAppPassword}
+                      onChange={(e) => setBitbucketAppPassword(e.target.value)}
+                      placeholder="App password (not your account password)"
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full"
+                      onClick={() => setShowBitbucketPassword(!showBitbucketPassword)}
+                    >
+                      {showBitbucketPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {gitProviderInfoMap.bitbucket.note}. Create app password at{" "}
+                    <a
+                      href={gitProviderInfoMap.bitbucket.tokenUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline flex items-center gap-1"
+                    >
+                      {gitProviderInfoMap.bitbucket.tokenUrl} <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
