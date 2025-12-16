@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "cross-env NODE_ENV=development tsx server/index-dev.ts",
     "build": "vite build && esbuild server/index-prod.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/index.js",
-    "start": "cross-env NODE_ENV=production node dist/index.js",
+    "start": "npm ci --only=production && cross-env NODE_ENV=production node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
