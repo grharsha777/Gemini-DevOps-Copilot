@@ -221,7 +221,21 @@ Return ONLY valid JSON, no markdown or extra text.`;
         const text = chatResponse.choices?.[0].message.content;
         if (typeof text === 'string') {
           const jsonStr = text.replace(/^```json\s*|\s*```$/g, "").trim();
-          return JSON.parse(jsonStr);
+          const parsed = JSON.parse(jsonStr);
+
+          if (Array.isArray(parsed)) {
+            return parsed;
+          } else if (typeof parsed === 'object' && parsed !== null) {
+            // Mistral json_object mode forces an object, but we need an array.
+            // Try to find the array in the object values.
+            const values = Object.values(parsed);
+            const arrayValue = values.find(val => Array.isArray(val));
+            if (arrayValue) return arrayValue;
+
+            // If no array found, implies we might need to enforce the structure in the prompt more strictly
+            // or return the object if it happens to match schema (unlikely for "array" requirement)
+          }
+          return parsed;
         }
       } catch (mistralError: any) {
         console.error("Mistral Explanation Fallback error:", mistralError);
