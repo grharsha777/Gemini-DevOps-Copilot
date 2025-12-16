@@ -11,7 +11,7 @@ import { Send, Sparkles, Code, TestTube, FileText, RefreshCw, Copy, Check, Alert
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { MultiModalInput, type MediaAttachment } from "@/components/multimodal-input";
+import { MultimodalInput } from "@/components/multimodal-input";
 import type { ChatMessage, AIMode, AIModel, AIProvider } from "@shared/schema";
 
 export default function Copilot() {

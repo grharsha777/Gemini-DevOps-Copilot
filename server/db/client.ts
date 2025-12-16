@@ -125,4 +125,7 @@ class DatabaseClient {
 // Export a singleton instance
 export const db = DatabaseClient.getInstance();
 
+// Export the pool for backward compatibility
+export const pool = db['pool'];
+
 export default db;
