@@ -11,7 +11,7 @@ import { Send, Sparkles, Code, TestTube, FileText, RefreshCw, Copy, Check, Alert
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { MultimodalInput } from "@/components/multimodal-input";
+import { MultimodalInput, type MediaAttachment } from "@/components/multimodal-input";
 import type { ChatMessage, AIMode, AIModel, AIProvider } from "@shared/schema";
 
 export default function Copilot() {
@@ -287,12 +287,10 @@ export default function Copilot() {
       </div>
 
       <div className="p-6 border-t border-border bg-card/50 backdrop-blur-sm">
-        <MultiModalInput
-          value={input}
-          onChange={setInput}
-          onSend={handleSubmit}
+        <MultimodalInput
+          onSubmit={(data) => handleSubmit(input, data as MediaAttachment[])}
+          isLoading={generateMutation.isPending}
           placeholder={`Ask AI to ${mode === "generate" ? "write code" : mode === "test" ? "create tests" : mode === "document" ? "write documentation" : mode === "refactor" ? "refactor code" : "create a boilerplate"}... (or use voice/image/file input)`}
-          disabled={generateMutation.isPending}
         />
       </div>
     </div>

@@ -41,6 +41,12 @@ interface MediaPreview {
   preview?: string;
 }
 
+export type MediaAttachment = {
+  file: File;
+  type: string;
+  content?: string;
+};
+
 export function MultimodalInput({
   onSubmit,
   isLoading = false,
