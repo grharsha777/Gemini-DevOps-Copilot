@@ -63,7 +63,7 @@ export async function generateCode(
       try {
         const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
         const chatResponse = await client.chat.complete({
-          model: "mistral-large-latest",
+          model: "codestral-latest",
           messages: [{ role: 'user', content: prompt }],
         });
 
@@ -210,7 +210,7 @@ Return ONLY valid JSON, no markdown or extra text.`;
       try {
         const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
         const chatResponse = await client.chat.complete({
-          model: "mistral-large-latest",
+          model: "codestral-latest",
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: `Analyze this code:\n\n${code}` }
