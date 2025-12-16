@@ -498,6 +498,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Project files endpoints
+  app.get('/api/projects/:id/files', ensureAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const files = await storage.listProjectFiles(id);
+      res.json({ files });
+    } catch (err: any) {
+      console.error('list project files failed', err?.message || err);
+      res.status(500).json({ error: err?.message || 'failed' });
+    }
+  });
+
+  app.get('/api/projects/:id/files/*', ensureAuth, async (req, res) => {
+    try {
+      const id = req.params.id;
+      // path comes after /files/
+      const p = req.params[0];
+      const file = await storage.getProjectFile(id, p);
+      if (!file) return res.status(404).json({ error: 'not found' });
+      res.json({ file });
+    } catch (err: any) {
+      console.error('get project file failed', err?.message || err);
+      res.status(500).json({ error: err?.message || 'failed' });
+    }
+  });
+
+  app.post('/api/projects/:id/files', ensureAuth, express.json(), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { path: filePath, content, metadata } = req.body || {};
+      if (!filePath) return res.status(400).json({ error: 'path required' });
+      const saved = await storage.saveProjectFile(id, filePath, content || '', metadata || {});
+      res.json({ file: saved });
+    } catch (err: any) {
+      console.error('save project file failed', err?.message || err);
+      res.status(500).json({ error: err?.message || 'failed' });
+    }
+  });
+
+  app.delete('/api/projects/:id/files', ensureAuth, express.json(), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { path: filePath } = req.body || {};
+      if (!filePath) return res.status(400).json({ error: 'path required' });
+      const removed = await storage.deleteProjectFile(id, filePath);
+      res.json({ removed });
+    } catch (err: any) {
+      console.error('delete project file failed', err?.message || err);
+      res.status(500).json({ error: err?.message || 'failed' });
+    }
+  });
+
   app.get('/api/github/actions/:owner/:repo/runs/persisted', async (req, res) => {
     try {
       const { owner, repo } = req.params;

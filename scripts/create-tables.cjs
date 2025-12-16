@@ -60,6 +60,19 @@ CREATE TABLE IF NOT EXISTS projects (
   created_at timestamptz DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);
+
+-- Project files storage for App Builder
+CREATE TABLE IF NOT EXISTS project_files (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id uuid NOT NULL,
+  path text NOT NULL,
+  content text,
+  metadata jsonb,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_project_files_project ON project_files(project_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_project_files_project_path ON project_files(project_id, path);
 `;
 
 const DATABASE_URL = process.env.DATABASE_URL;

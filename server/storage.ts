@@ -26,6 +26,11 @@ export interface IStorage {
   // Notifications
   createNotification(userId: string | null, type: string, payload: any): Promise<any>;
   getNotificationsForUser(userId: string): Promise<any[]>;
+  // Project files
+  saveProjectFile(projectId: string, path: string, content: string, metadata?: any): Promise<any>;
+  listProjectFiles(projectId: string): Promise<any[]>;
+  getProjectFile(projectId: string, path: string): Promise<any | null>;
+  deleteProjectFile(projectId: string, path: string): Promise<any | null>;
 }
 
 export class MemStorage implements IStorage {
@@ -117,6 +122,42 @@ export class MemStorage implements IStorage {
     const idx = projects.findIndex((p: any) => p.id === projectId);
     if (idx === -1) return null;
     const [removed] = projects.splice(idx, 1);
+    return removed;
+  }
+
+  // Project files CRUD (in-memory)
+  async saveProjectFile(projectId: string, path: string, content: string, metadata: any = {}) {
+    if (!(this as any)._projectFiles) (this as any)._projectFiles = {};
+    const map = (this as any)._projectFiles;
+    map[projectId] = map[projectId] || [];
+    const existing = map[projectId].find((f: any) => f.path === path);
+    if (existing) {
+      existing.content = content;
+      existing.metadata = metadata;
+      existing.updated_at = new Date().toISOString();
+      return existing;
+    }
+    const file = { id: randomUUID(), project_id: projectId, path, content, metadata, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    map[projectId].push(file);
+    return file;
+  }
+
+  async listProjectFiles(projectId: string) {
+    const map = (this as any)._projectFiles || {};
+    return map[projectId] || [];
+  }
+
+  async getProjectFile(projectId: string, path: string) {
+    const files = (this as any)._projectFiles?.[projectId] || [];
+    return files.find((f: any) => f.path === path) || null;
+  }
+
+  async deleteProjectFile(projectId: string, path: string) {
+    const files = (this as any)._projectFiles || {};
+    const list = files[projectId] || [];
+    const idx = list.findIndex((f: any) => f.path === path);
+    if (idx === -1) return null;
+    const [removed] = list.splice(idx, 1);
     return removed;
   }
 }
@@ -233,6 +274,37 @@ export class PostgresStorage implements IStorage {
     if (!pool) return null;
     const res = await pool.query('DELETE FROM projects WHERE id = $1 RETURNING *', [projectId]);
     return res.rows[0];
+  }
+
+  // Project files (Postgres)
+  async saveProjectFile(projectId: string, path: string, content: string, metadata: any = {}) {
+    if (!pool) return { id: randomUUID(), project_id: projectId, path, content, metadata, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    const res = await pool.query(
+      `INSERT INTO project_files (project_id, path, content, metadata, created_at, updated_at)
+       VALUES ($1,$2,$3,$4, now(), now())
+       ON CONFLICT (project_id, path) DO UPDATE SET content = EXCLUDED.content, metadata = EXCLUDED.metadata, updated_at = now()
+       RETURNING *`,
+      [projectId, path, content, metadata]
+    );
+    return res.rows[0];
+  }
+
+  async listProjectFiles(projectId: string) {
+    if (!pool) return [];
+    const res = await pool.query('SELECT id, project_id, path, metadata, created_at, updated_at FROM project_files WHERE project_id = $1 ORDER BY path', [projectId]);
+    return res.rows;
+  }
+
+  async getProjectFile(projectId: string, path: string) {
+    if (!pool) return null;
+    const res = await pool.query('SELECT * FROM project_files WHERE project_id = $1 AND path = $2', [projectId, path]);
+    return res.rows[0] || null;
+  }
+
+  async deleteProjectFile(projectId: string, path: string) {
+    if (!pool) return null;
+    const res = await pool.query('DELETE FROM project_files WHERE project_id = $1 AND path = $2 RETURNING *', [projectId, path]);
+    return res.rows[0] || null;
   }
 
   async getNotificationsForUser(userId: string): Promise<any[]> {
