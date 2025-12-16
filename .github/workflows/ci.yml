@@ -47,8 +47,21 @@ jobs:
             files: coverage
       - name: Generate placeholder metrics
         run: npm run generate:all
-      - name: Upload metrics
-        uses: actions/upload-artifact@v4
-        with:
-          name: metrics
-          path: metrics
+        - name: Upload metrics
+          uses: actions/upload-artifact@v4
+          with:
+            name: metrics
+            path: metrics
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Deploy to Render
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.RENDER_DEPLOY_HOOK }}" \
+            -H "Content-Type: application/json" \
+            https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys \
+            || echo "Render deploy hook not configured or failed"

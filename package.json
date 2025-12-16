@@ -18,7 +18,8 @@
     "analysis:snyk": "node ./scripts/run-snyk.js",
     "db:create-tables": "node ./scripts/create-tables.js",
     "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "deploy": "node ./scripts/deploy.js"
   },
   "dependencies": {
   "pg": "^8.11.0",
