@@ -170,4 +170,15 @@ export class GitHubService {
 
     return hotspots;
   }
+
+  async getWorkflows(owner: string, repo: string): Promise<any> {
+    // Returns list of workflows for the repo
+    return this.request<any>(`/repos/${owner}/${repo}/actions/workflows`);
+  }
+
+  async getWorkflowRuns(owner: string, repo: string, workflow_id?: string): Promise<any> {
+    let endpoint = `/repos/${owner}/${repo}/actions/runs?per_page=50`;
+    if (workflow_id) endpoint = `/repos/${owner}/${repo}/actions/workflows/${workflow_id}/runs?per_page=50`;
+    return this.request<any>(endpoint);
+  }
 }

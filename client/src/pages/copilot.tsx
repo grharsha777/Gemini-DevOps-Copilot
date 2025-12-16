@@ -11,6 +11,7 @@ import { Send, Sparkles, Code, TestTube, FileText, RefreshCw, Copy, Check, Alert
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { MultiModalInput, type MediaAttachment } from "@/components/multimodal-input";
 import type { ChatMessage, AIMode, AIModel, AIProvider } from "@shared/schema";
 
 export default function Copilot() {
@@ -44,7 +45,11 @@ export default function Copilot() {
   }, [messages]);
 
   const generateMutation = useMutation({
-    mutationFn: async (prompt: string) => {
+    mutationFn: async (payload: any) => {
+      // payload can be [prompt, attachments] or { prompt, attachments }
+      const prompt = Array.isArray(payload) ? payload[0] : payload.prompt || payload;
+      const attachments: MediaAttachment[] | undefined = Array.isArray(payload) ? payload[1] : payload.attachments;
+
       const userMessage: ChatMessage = {
         id: Date.now().toString(),
         role: "user",
@@ -56,21 +61,40 @@ export default function Copilot() {
       // Get API configuration for the selected tier
       const apiConfig = getApiConfig(modelTier);
       
-      const requestBody: any = {
-        prompt,
-        mode,
-        modelTier,
-      };
+      // Prepare FormData for multi-modal input
+      const formData = new FormData();
+      formData.append("prompt", prompt);
+      formData.append("mode", mode);
+      formData.append("modelTier", modelTier);
 
-      // If user has configured API keys, use them
       if (apiConfig) {
-        requestBody.provider = apiConfig.provider;
-        requestBody.apiKey = apiConfig.apiKey;
-        if (apiConfig.model) requestBody.model = apiConfig.model;
-        if (apiConfig.baseUrl) requestBody.baseUrl = apiConfig.baseUrl;
+        formData.append("provider", apiConfig.provider);
+        formData.append("apiKey", apiConfig.apiKey);
+        if (apiConfig.model) formData.append("model", apiConfig.model);
+        if (apiConfig.baseUrl) formData.append("baseUrl", apiConfig.baseUrl);
       }
 
-      const response = await apiRequest("POST", "/api/ai/generate", requestBody);
+      // Add attachments
+      if (attachments && attachments.length > 0) {
+        attachments.forEach((att, index) => {
+          formData.append(`attachment_${index}`, att.file);
+          formData.append(`attachment_${index}_type`, att.type);
+          if (att.content) {
+            formData.append(`attachment_${index}_content`, att.content);
+          }
+        });
+        formData.append("attachmentCount", attachments.length.toString());
+      }
+
+      const response = await fetch("/api/ai/generate-multimodal", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate response");
+      }
+
       const data = await response.json();
       return data as { text: string };
     },
@@ -96,10 +120,11 @@ export default function Copilot() {
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
-    generateMutation.mutate(input);
+  const handleSubmit = (message: string, attachments?: MediaAttachment[]) => {
+    if (!message.trim() && (!attachments || attachments.length === 0)) return;
+    generateMutation.mutate([message, attachments], { 
+      onSuccess: () => setInput(""),
+    });
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -262,30 +287,13 @@ export default function Copilot() {
       </div>
 
       <div className="p-6 border-t border-border bg-card/50 backdrop-blur-sm">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={`Ask AI to ${mode === "generate" ? "write code" : mode === "test" ? "create tests" : mode === "document" ? "write documentation" : mode === "refactor" ? "refactor code" : "create a boilerplate"}...`}
-            className="min-h-[60px] resize-none"
-            data-testid="input-prompt"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit(e);
-              }
-            }}
-          />
-          <Button
-            type="submit"
-            size="icon"
-            className="h-[60px] w-[60px]"
-            disabled={!input.trim() || generateMutation.isPending}
-            data-testid="button-send"
-          >
-            <Send className="w-5 h-5" />
-          </Button>
-        </form>
+        <MultiModalInput
+          value={input}
+          onChange={setInput}
+          onSend={handleSubmit}
+          placeholder={`Ask AI to ${mode === "generate" ? "write code" : mode === "test" ? "create tests" : mode === "document" ? "write documentation" : mode === "refactor" ? "refactor code" : "create a boilerplate"}... (or use voice/image/file input)`}
+          disabled={generateMutation.isPending}
+        />
       </div>
     </div>
   );

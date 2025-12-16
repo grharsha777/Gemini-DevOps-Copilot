@@ -6,6 +6,11 @@ import express, {
   Response,
   NextFunction,
 } from "express";
+import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
+import { pool } from './db/client';
+import passport from 'passport';
+import { configurePassport } from './auth';
 
 import { registerRoutes } from "./routes";
 
@@ -21,6 +26,32 @@ export function log(message: string, source = "express") {
 }
 
 export const app = express();
+
+// Configure session and passport BEFORE registering routes
+const cookieSecret = process.env.COOKIE_SECRET || 'dev-secret';
+let sessionMiddleware: any;
+if (process.env.DATABASE_URL && pool) {
+  const PgStore = connectPgSimple(session);
+  sessionMiddleware = session({
+    store: new PgStore({ pool }),
+    secret: cookieSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false },
+  });
+} else {
+  sessionMiddleware = session({
+    secret: cookieSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false },
+  });
+}
+app.use(sessionMiddleware);
+
+configurePassport();
+app.use(passport.initialize());
+app.use(passport.session());
 
 declare module 'http' {
   interface IncomingMessage {
