@@ -4,6 +4,8 @@
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/grharsha777/Gemini-DevOps-Copilot)
 
+🌐 **Live Demo:** [https://gemini-devops-copilot.onrender.com/](https://gemini-devops-copilot.onrender.com/)
+
 ## 🚀 Key Features
 
 -   **Multi-Model Intelligence:** Seamlessly integrates with **Google Gemini**, **Anthropic Claude**, **Mistral AI**, and **DeepSeek**.
