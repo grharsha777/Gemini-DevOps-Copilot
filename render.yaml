@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: codexvortex-ai
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_VERSION
+        value: 20.16.0
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
