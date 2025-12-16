@@ -2,6 +2,8 @@
 
 **Gemini-DevOps-Copilot** (also known as CodeVortexAI) is an advanced, AI-powered coding assistant designed to streamline your development workflow. It integrates multiple leading AI models to provide robust code generation, debugging, explanation, and documentation capabilities.
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/grharsha777/Gemini-DevOps-Copilot)
+
 ## 🚀 Key Features
 
 -   **Multi-Model Intelligence:** Seamlessly integrates with **Google Gemini**, **Anthropic Claude**, **Mistral AI**, and **DeepSeek**.
