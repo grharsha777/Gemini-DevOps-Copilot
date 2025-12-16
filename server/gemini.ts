@@ -467,6 +467,11 @@ Return ONLY valid JSON array, no markdown or extra text.`;
         client = new OpenAI({ apiKey, baseURL: "https://api.deepseek.com" });
       } else if (provider === "openrouter") {
         client = new OpenAI({ apiKey, baseURL: "https://openrouter.ai/api/v1" });
+      } else if (provider === "huggingface") {
+        client = new OpenAI({ 
+          apiKey, 
+          baseURL: baseUrl || "https://api-inference.huggingface.co/v1" 
+        });
       } else if (provider === "groq") {
         const groq = new Groq({ apiKey });
         const completion = await groq.chat.completions.create({

@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import Home from "@/pages/home";
 import Copilot from "@/pages/copilot";
+import Agent from "@/pages/agent";
 import Explain from "@/pages/explain";
 import Dashboard from "@/pages/dashboard";
 import Settings from "@/pages/settings";
@@ -19,6 +20,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/copilot" component={Copilot} />
+      <Route path="/agent" component={Agent} />
       <Route path="/explain" component={Explain} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/settings" component={Settings} />

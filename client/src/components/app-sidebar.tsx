@@ -1,4 +1,4 @@
-import { Home, Code, FileText, BarChart3, Settings, Sparkles } from "lucide-react";
+import { Home, Code, FileText, BarChart3, Settings, Sparkles, Bot } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -22,6 +22,11 @@ const menuItems = [
     title: "AI Copilot",
     url: "/copilot",
     icon: Sparkles,
+  },
+  {
+    title: "Agent Mode",
+    url: "/agent",
+    icon: Bot,
   },
   {
     title: "Explainable AI",

@@ -5,6 +5,7 @@ import { generateCode, explainCode, analyzeHotspotFile, testApiKey, generateWith
 import { GitHubService } from "./github";
 import { GitLabService } from "./gitlab";
 import { BitbucketService } from "./bitbucket";
+import { AgentSystem } from "./agent";
 import type { AIProvider, GitProvider } from "@shared/schema";
 
 // Helper function to get the appropriate Git service
@@ -237,8 +238,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      const days = parseInt(req.query.days as string) || 7;
       const [commitActivity, prStatus, openIssues, hotspots] = await Promise.all([
-        service.getCommitActivity(owner, repo, 7),
+        service.getCommitActivity(owner, repo, days),
         service.getPRStatus(owner, repo),
         service.getOpenIssues(owner, repo),
         service.getHotspotFiles(owner, repo),
@@ -367,6 +369,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Hotspots error:", error);
       res.status(500).json({
         error: error instanceof Error ? error.message : "Failed to fetch hotspots",
+      });
+    }
+  });
+
+  // Agent Mode Routes
+  app.post("/api/agent/import-repo", async (req, res) => {
+    try {
+      const schema = z.object({
+        url: z.string().url().or(z.string()),
+        provider: z.enum(["github", "gitlab", "bitbucket"]),
+      });
+
+      const { url, provider } = schema.parse(req.body);
+
+      // Get token from headers or localStorage (passed from frontend)
+      const token = req.headers.authorization?.replace("Bearer ", "") || "";
+      
+      if (!token && provider !== "github") {
+        return res.status(401).json({ error: `${provider} token required` });
+      }
+
+      // Parse owner/repo from URL
+      const urlMatch = url.match(/(?:github\.com|gitlab\.com|bitbucket\.org)\/([^\/]+)\/([^\/]+)/);
+      if (!urlMatch) {
+        // Try parsing as owner/repo format
+        const parts = url.split("/");
+        if (parts.length === 2) {
+          return res.json({
+            owner: parts[0],
+            repo: parts[1].replace(".git", ""),
+          });
+        }
+        return res.status(400).json({ error: "Invalid repository URL format" });
+      }
+
+      const owner = urlMatch[1];
+      const repo = urlMatch[2].replace(".git", "");
+
+      res.json({ owner, repo });
+    } catch (error) {
+      console.error("Import repo error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to import repository",
+      });
+    }
+  });
+
+  app.post("/api/agent/run", async (req, res) => {
+    try {
+      const schema = z.object({
+        task: z.string().min(1),
+        action: z.enum(["enhance", "debug", "explain", "develop", "custom"]),
+        customAction: z.string().optional(),
+        repository: z.object({
+          provider: z.enum(["github", "gitlab", "bitbucket"]),
+          owner: z.string(),
+          repo: z.string(),
+        }).optional(),
+        fastConfig: z.object({
+          provider: z.string(),
+          apiKey: z.string(),
+          model: z.string().optional(),
+          baseUrl: z.string().optional(),
+        }).nullable(),
+        proConfig: z.object({
+          provider: z.string(),
+          apiKey: z.string(),
+          model: z.string().optional(),
+          baseUrl: z.string().optional(),
+        }).nullable(),
+      });
+
+      const data = schema.parse(req.body);
+
+      const agent = new AgentSystem(data.fastConfig, data.proConfig);
+      const result = await agent.runTask({
+        task: data.task,
+        action: data.action,
+        customAction: data.customAction,
+        repository: data.repository,
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Agent run error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to run agent task",
       });
     }
   });
