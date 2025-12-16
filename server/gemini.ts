@@ -2,261 +2,547 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { Mistral } from "@mistralai/mistralai";
+import Groq from "groq-sdk";
+import type { AIProvider } from "@shared/schema";
 
-// DON'T DELETE THIS COMMENT
-// Follow these instructions when using this blueprint:
-// - Note that the newest Gemini model series is "gemini-2.0-flash" or "gemini-1.5-pro"
-//   - do not change this unless explicitly requested by the user
+// Provider configuration interface
+interface ProviderConfig {
+  provider: AIProvider;
+  apiKey: string;
+  model?: string;
+  baseUrl?: string;
+}
 
-// This API key is from Gemini Developer API Key, not vertex AI API Key
-// This API key is from Gemini Developer API Key, not vertex AI API Key
-// Removed global 'ai' constant to prevent early initialization before dotenv loads
+// System prompts for different modes
+const systemPrompts: Record<string, string> = {
+  generate:
+    "You are CodeVortexAI, an advanced intelligent coding assistant. Generate highly optimized, modern, and production-ready code. Focus on clean architecture, type safety, and best practices. Your code should be robust and scalable.",
+  test: "You are the Vortex Quality Assurance AI. Create comprehensive, edge-case covering test suites using modern testing frameworks. Ensure 100% critical path coverage.",
+  document:
+    "You are the Vortex Documentation Engine. Produce crystal-clear, developer-centric documentation. Include implementation details, usage patterns, and API references.",
+  refactor:
+    "You are the Vortex Refactoring Core. Analyze code for deeper structural improvements. Optimize for performance, readability, and maintainability without altering behavior.",
+  boilerplate:
+    "You are the Vortex Scaffolder. Generate solid, extensible foundational code structures that serve as perfect starting points for complex systems.",
+  explain:
+    "You are the Vortex Educator. Deconstruct complex logic into understandable concepts. Explain the 'why' and 'how' with precision.",
+};
 
-
-export async function generateCode(
-  prompt: string,
-  mode: string,
-  modelName: string = "gemini-2.0-flash-exp",
-): Promise<string> {
-  const systemPrompts: Record<string, string> = {
-    generate:
-      "You are CodeVortexAI, an advanced intelligent coding assistant. Generate highly optimized, modern, and production-ready code. Focus on clean architecture, type safety, and best practices. Your code should be robust and scalable.",
-    test: "You are the Vortex Quality Assurance AI. Create comprehensive, edge-case covering test suites using modern testing frameworks. Ensure 100% critical path coverage.",
-    document:
-      "You are the Vortex Documentation Engine. Produce crystal-clear, developer-centric documentation. Include implementation details, usage patterns, and API references.",
-    refactor:
-      "You are the Vortex Refactoring Core. Analyze code for deeper structural improvements. Optimize for performance, readability, and maintainability without altering behavior.",
-    boilerplate:
-      "You are the Vortex Scaffolder. Generate solid, extensible foundational code structures that serve as perfect starting points for complex systems.",
-    explain:
-      "You are the Vortex Educator. Deconstruct complex logic into understandable concepts. Explain the 'why' and 'how' with precision.",
-  };
-
-  const systemInstruction = systemPrompts[mode] || systemPrompts.generate;
-
-  try {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      throw new Error("GEMINI_API_KEY is missing in environment variables");
-    }
-
-    console.log(`[Gemini] Initializing with model: ${modelName} `);
-
-    // Initialize GoogleGenerativeAI with the API key
-    const genAI = new GoogleGenerativeAI(key);
-
-    // Get the generative model
-    const model = genAI.getGenerativeModel({
-      model: modelName,
-      systemInstruction: systemInstruction
-    });
-
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
-  } catch (error: any) {
-    console.error("Gemini API error details:", JSON.stringify(error, null, 2));
-
-    // Try Mistral (Verified Working)
-    if (process.env.MISTRAL_API_KEY) {
-      console.log("[Gemini] Failed. Falling back to Mistral...");
-      try {
-        const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
-        const chatResponse = await client.chat.complete({
-          model: "codestral-latest",
-          messages: [{ role: 'user', content: prompt }],
-        });
-
-        const text = chatResponse.choices?.[0].message.content;
-        if (typeof text === 'string') return text;
-        if (Array.isArray(text)) return text.join('');
-        throw new Error("Invalid Mistral response format");
-      } catch (mistralError: any) {
-        console.error("Mistral Fallback error:", mistralError);
-      }
-    }
-
-    // Try Claude fallback
-    if (process.env.ANTHROPIC_API_KEY) {
-      console.log("[Gemini/Mistral] Failed. Falling back to Claude...");
-      try {
-        const anthropic = new Anthropic({
-          apiKey: process.env.ANTHROPIC_API_KEY,
-        });
-
-        const response = await anthropic.messages.create({
-          model: "claude-3-5-sonnet-20241022",
-          max_tokens: 8192,
-          system: systemInstruction,
-          messages: [
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-        });
-
-        const textBlock = response.content[0];
-        if (textBlock.type === "text") {
-          return textBlock.text;
-        }
-      } catch (claudeError: any) {
-        console.error("Claude Fallback API error:", claudeError);
-      }
-    }
-
-    // Try DeepSeek fallback
-    if (process.env.DEEPSEEK_API_KEY) {
-      console.log("[All others] Failed. Falling back to DeepSeek...");
-      try {
-        const openai = new OpenAI({
-          baseURL: 'https://api.deepseek.com',
-          apiKey: process.env.DEEPSEEK_API_KEY
-        });
-        const completion = await openai.chat.completions.create({
-          messages: [{ role: "system", content: systemInstruction }, { role: "user", content: prompt }],
-          model: "deepseek-chat",
-        });
-        return completion.choices[0].message.content || "No response from DeepSeek";
-      } catch (deepseekError: any) {
-        console.error("DeepSeek Fallback error:", deepseekError);
-      }
-    }
-
-    throw new Error(
-      `Failed to generate content: ${error.message || "Unknown error"}`,
-    );
+// Get default model for each provider
+function getDefaultModel(provider: AIProvider): string {
+  switch (provider) {
+    case "gemini":
+      return "gemini-2.0-flash-exp";
+    case "openai":
+      return "gpt-4o-mini";
+    case "mistral":
+      return "codestral-latest";
+    case "groq":
+      return "llama-3.3-70b-versatile";
+    case "anthropic":
+      return "claude-3-5-sonnet-20241022";
+    case "deepseek":
+      return "deepseek-chat";
+    case "openrouter":
+      return "openai/gpt-4o-mini";
+    default:
+      return "gpt-3.5-turbo";
   }
 }
 
-export async function explainCode(
+// Test if an API key works
+export async function testApiKey(config: ProviderConfig): Promise<{ success: boolean; error?: string }> {
+  const { provider, apiKey, model, baseUrl } = config;
+  const testPrompt = "Say 'Hello' in one word.";
+
+  // Validate API key is not empty
+  if (!apiKey || !apiKey.trim()) {
+    return { success: false, error: "API key cannot be empty" };
+  }
+
+  console.log(`[testApiKey] Testing ${provider} with model ${model || "default"}`);
+
+  try {
+    switch (provider) {
+      case "gemini": {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const geminiModel = genAI.getGenerativeModel({ model: model || "gemini-2.0-flash-exp" });
+        await geminiModel.generateContent(testPrompt);
+        return { success: true };
+      }
+
+      case "openai": {
+        const openai = new OpenAI({ apiKey });
+        await openai.chat.completions.create({
+          model: model || "gpt-4o-mini",
+          messages: [{ role: "user", content: testPrompt }],
+          max_tokens: 10,
+        });
+        return { success: true };
+      }
+
+      case "mistral": {
+        const mistral = new Mistral({ apiKey });
+        await mistral.chat.complete({
+          model: model || "mistral-small-latest",
+          messages: [{ role: "user", content: testPrompt }],
+        });
+        return { success: true };
+      }
+
+      case "groq": {
+        const groq = new Groq({ apiKey });
+        await groq.chat.completions.create({
+          model: model || "llama-3.3-70b-versatile",
+          messages: [{ role: "user", content: testPrompt }],
+          max_tokens: 10,
+        });
+        return { success: true };
+      }
+
+      case "anthropic": {
+        const anthropic = new Anthropic({ apiKey });
+        await anthropic.messages.create({
+          model: model || "claude-3-haiku-20240307",
+          max_tokens: 10,
+          messages: [{ role: "user", content: testPrompt }],
+        });
+        return { success: true };
+      }
+
+      case "deepseek": {
+        const deepseek = new OpenAI({
+          apiKey,
+          baseURL: "https://api.deepseek.com",
+        });
+        await deepseek.chat.completions.create({
+          model: model || "deepseek-chat",
+          messages: [{ role: "user", content: testPrompt }],
+          max_tokens: 10,
+        });
+        return { success: true };
+      }
+
+      case "openrouter": {
+        const openrouter = new OpenAI({
+          apiKey,
+          baseURL: "https://openrouter.ai/api/v1",
+        });
+        await openrouter.chat.completions.create({
+          model: model || "openai/gpt-4o-mini",
+          messages: [{ role: "user", content: testPrompt }],
+          max_tokens: 10,
+        });
+        return { success: true };
+      }
+
+      case "custom": {
+        if (!baseUrl) {
+          return { success: false, error: "Base URL is required for custom provider" };
+        }
+        const custom = new OpenAI({
+          apiKey,
+          baseURL: baseUrl,
+        });
+        await custom.chat.completions.create({
+          model: model || "gpt-3.5-turbo",
+          messages: [{ role: "user", content: testPrompt }],
+          max_tokens: 10,
+        });
+        return { success: true };
+      }
+
+      default:
+        return { success: false, error: "Unknown provider" };
+    }
+  } catch (error: any) {
+    console.error(`[${provider}] API test error:`, error);
+    console.error(`[${provider}] Error details:`, {
+      message: error?.message,
+      status: error?.status,
+      statusText: error?.statusText,
+      code: error?.code,
+      response: error?.response,
+      error: error?.error,
+    });
+    
+    // Provide more detailed error messages
+    let errorMessage = "API key validation failed";
+    
+    // Try to extract error message from various error formats
+    if (error?.response?.data?.error?.message) {
+      errorMessage = error.response.data.error.message;
+    } else if (error?.response?.data?.error) {
+      errorMessage = typeof error.response.data.error === "string" 
+        ? error.response.data.error 
+        : JSON.stringify(error.response.data.error);
+    } else if (error?.error?.message) {
+      errorMessage = error.error.message;
+    } else if (error?.message) {
+      errorMessage = error.message;
+    } else if (error?.statusText) {
+      errorMessage = error.statusText;
+    } else if (typeof error === "string") {
+      errorMessage = error;
+    } else if (error?.toString) {
+      errorMessage = error.toString();
+    }
+    
+    // Check for common error types and provide user-friendly messages
+    const lowerMessage = errorMessage.toLowerCase();
+    if (lowerMessage.includes("401") || lowerMessage.includes("unauthorized") || lowerMessage.includes("invalid api key")) {
+      errorMessage = "Invalid API key. Please check your API key and try again. Make sure you copied the entire key correctly.";
+    } else if (lowerMessage.includes("403") || lowerMessage.includes("forbidden")) {
+      errorMessage = "API key does not have permission. Please check your API key permissions in your provider's dashboard.";
+    } else if (lowerMessage.includes("429") || lowerMessage.includes("rate limit") || lowerMessage.includes("quota")) {
+      errorMessage = "Rate limit or quota exceeded. Please check your account limits and try again later.";
+    } else if (lowerMessage.includes("model") || lowerMessage.includes("not found")) {
+      errorMessage = `Model error: ${errorMessage}. Please check if the model name "${model || "default"}" is correct for ${provider}.`;
+    } else if (lowerMessage.includes("network") || lowerMessage.includes("fetch") || lowerMessage.includes("econnrefused")) {
+      errorMessage = "Network error. Please check your internet connection and try again.";
+    } else if (lowerMessage.includes("timeout")) {
+      errorMessage = "Request timed out. Please try again.";
+    } else if (lowerMessage.includes("api key") || lowerMessage.includes("authentication")) {
+      errorMessage = `Authentication failed: ${errorMessage}. Please verify your API key is correct.`;
+    }
+    
+    return { success: false, error: errorMessage };
+  }
+}
+
+// Generate content using the specified provider
+export async function generateWithProvider(
+  prompt: string,
+  mode: string,
+  config: ProviderConfig
+): Promise<string> {
+  const { provider, apiKey, model, baseUrl } = config;
+  const systemInstruction = systemPrompts[mode] || systemPrompts.generate;
+  const modelToUse = model || getDefaultModel(provider);
+
+  console.log(`[AI] Using ${provider} with model ${modelToUse}`);
+
+  switch (provider) {
+    case "gemini": {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const geminiModel = genAI.getGenerativeModel({
+        model: modelToUse,
+        systemInstruction,
+      });
+      const result = await geminiModel.generateContent(prompt);
+      return result.response.text();
+    }
+
+    case "openai": {
+      const openai = new OpenAI({ apiKey });
+      const completion = await openai.chat.completions.create({
+        model: modelToUse,
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: prompt },
+        ],
+      });
+      return completion.choices[0].message.content || "No response";
+    }
+
+    case "mistral": {
+      const mistral = new Mistral({ apiKey });
+      const response = await mistral.chat.complete({
+        model: modelToUse,
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: prompt },
+        ],
+      });
+      const content = response.choices?.[0].message.content;
+      if (typeof content === "string") return content;
+      if (Array.isArray(content)) return content.join("");
+      return "No response";
+    }
+
+    case "groq": {
+      const groq = new Groq({ apiKey });
+      const completion = await groq.chat.completions.create({
+        model: modelToUse,
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: prompt },
+        ],
+      });
+      return completion.choices[0].message.content || "No response";
+    }
+
+    case "anthropic": {
+      const anthropic = new Anthropic({ apiKey });
+      const response = await anthropic.messages.create({
+        model: modelToUse,
+        max_tokens: 8192,
+        system: systemInstruction,
+        messages: [{ role: "user", content: prompt }],
+      });
+      const textBlock = response.content[0];
+      if (textBlock.type === "text") return textBlock.text;
+      return "No response";
+    }
+
+    case "deepseek": {
+      const deepseek = new OpenAI({
+        apiKey,
+        baseURL: "https://api.deepseek.com",
+      });
+      const completion = await deepseek.chat.completions.create({
+        model: modelToUse,
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: prompt },
+        ],
+      });
+      return completion.choices[0].message.content || "No response";
+    }
+
+    case "openrouter": {
+      const openrouter = new OpenAI({
+        apiKey,
+        baseURL: "https://openrouter.ai/api/v1",
+      });
+      const completion = await openrouter.chat.completions.create({
+        model: modelToUse,
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: prompt },
+        ],
+      });
+      return completion.choices[0].message.content || "No response";
+    }
+
+    case "custom": {
+      if (!baseUrl) throw new Error("Base URL required for custom provider");
+      const custom = new OpenAI({ apiKey, baseURL: baseUrl });
+      const completion = await custom.chat.completions.create({
+        model: modelToUse,
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: prompt },
+        ],
+      });
+      return completion.choices[0].message.content || "No response";
+    }
+
+    default:
+      throw new Error(`Unknown provider: ${provider}`);
+  }
+}
+
+// Explain code using the specified provider (returns JSON)
+export async function explainWithProvider(
   code: string,
-  modelName: string = "gemini-1.5-pro",
+  config: ProviderConfig
 ): Promise<any> {
+  const { provider, apiKey, model, baseUrl } = config;
+  const modelToUse = model || getDefaultModel(provider);
+
   const systemPrompt = `You are an expert code reviewer and security analyst. 
 Analyze the provided code line by line and return a JSON array of explanations.
 For each significant line, provide:
-- lineNumber: the line number(starting from 1)
-  - code: the actual code on that line
-    - explanation: a clear explanation of what the line does
-      - riskLevel: "low", "medium", or "high"(optional, only if there's a concern)
-        - performanceNote: any performance considerations(optional)
-          - securityIssue: any security concerns(optional)
+- lineNumber: the line number (starting from 1)
+- code: the actual code on that line
+- explanation: a clear explanation of what the line does
+- riskLevel: "low", "medium", or "high" (optional, only if there's a concern)
+- performanceNote: any performance considerations (optional)
+- securityIssue: any security concerns (optional)
 
 Focus on important lines and group trivial lines together.
-Return ONLY valid JSON, no markdown or extra text.`;
+Return ONLY valid JSON array, no markdown or extra text.`;
 
-  // Try Claude first if API key is available
-  if (process.env.ANTHROPIC_API_KEY) {
-    try {
-      const anthropic = new Anthropic({
-        apiKey: process.env.ANTHROPIC_API_KEY,
+  const prompt = `Analyze this code:\n\n${code}`;
+
+  console.log(`[AI Explain] Using ${provider} with model ${modelToUse}`);
+
+  let responseText: string;
+
+  switch (provider) {
+    case "gemini": {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const geminiModel = genAI.getGenerativeModel({
+        model: modelToUse,
+        systemInstruction: systemPrompt,
+        generationConfig: { responseMimeType: "application/json" },
       });
+      const result = await geminiModel.generateContent(prompt);
+      responseText = result.response.text();
+      break;
+    }
 
+    case "openai": {
+      const openai = new OpenAI({ apiKey });
+      const completion = await openai.chat.completions.create({
+        model: modelToUse,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: prompt },
+        ],
+        response_format: { type: "json_object" },
+      });
+      responseText = completion.choices[0].message.content || "[]";
+      break;
+    }
+
+    case "anthropic": {
+      const anthropic = new Anthropic({ apiKey });
       const response = await anthropic.messages.create({
-        model: "claude-3-5-sonnet-20241022",
+        model: modelToUse,
         max_tokens: 8192,
         system: systemPrompt,
+        messages: [{ role: "user", content: prompt }],
+      });
+      const textBlock = response.content[0];
+      responseText = textBlock.type === "text" ? textBlock.text : "[]";
+      break;
+    }
+
+    default: {
+      // Use OpenAI-compatible endpoint for others
+      let client: OpenAI;
+      if (provider === "deepseek") {
+        client = new OpenAI({ apiKey, baseURL: "https://api.deepseek.com" });
+      } else if (provider === "openrouter") {
+        client = new OpenAI({ apiKey, baseURL: "https://openrouter.ai/api/v1" });
+      } else if (provider === "groq") {
+        const groq = new Groq({ apiKey });
+        const completion = await groq.chat.completions.create({
+          model: modelToUse,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: prompt },
+          ],
+        });
+        responseText = completion.choices[0].message.content || "[]";
+        break;
+      } else if (provider === "mistral") {
+        const mistral = new Mistral({ apiKey });
+        const response = await mistral.chat.complete({
+          model: modelToUse,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: prompt },
+          ],
+          responseFormat: { type: "json_object" },
+        });
+        const content = response.choices?.[0].message.content;
+        responseText = typeof content === "string" ? content : "[]";
+        break;
+      } else if (provider === "custom" && baseUrl) {
+        client = new OpenAI({ apiKey, baseURL: baseUrl });
+      } else {
+        throw new Error(`Unknown provider: ${provider}`);
+      }
+
+      const completion = await client!.chat.completions.create({
+        model: modelToUse,
         messages: [
-          {
-            role: "user",
-            content: `Analyze this code: \n\n${code} `,
-          },
+          { role: "system", content: systemPrompt },
+          { role: "user", content: prompt },
         ],
       });
-
-      const textBlock = response.content[0];
-      if (textBlock.type === "text") {
-        const rawJson = textBlock.text.trim();
-        // Clean up markdown code blocks if present
-        const jsonStr = rawJson.replace(/^```json\s *|\s * ```$/g, "").trim();
-        return JSON.parse(jsonStr);
-      }
-    } catch (error) {
-      console.error("Claude API error:", error);
-      // Fallback to Gemini if Claude fails
-      console.log("Falling back to Gemini...");
+      responseText = completion.choices[0].message.content || "[]";
     }
   }
 
-  try {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) throw new Error("GEMINI_API_KEY missing");
+  // Parse the JSON response
+  const jsonStr = responseText.replace(/^```json\s*|\s*```$/g, "").trim();
+  const parsed = JSON.parse(jsonStr);
 
-    const genAI = new GoogleGenerativeAI(key);
-    const model = genAI.getGenerativeModel({
+  // Handle both array and object responses
+  if (Array.isArray(parsed)) return parsed;
+  if (typeof parsed === "object" && parsed !== null) {
+    const values = Object.values(parsed);
+    const arrayValue = values.find((val) => Array.isArray(val));
+    if (arrayValue) return arrayValue;
+  }
+  return parsed;
+}
+
+// Legacy function for backward compatibility with environment variables
+export async function generateCode(
+  prompt: string,
+  mode: string,
+  modelName: string = "gemini-2.0-flash-exp"
+): Promise<string> {
+  // Try using environment variables as fallback
+  const key = process.env.GEMINI_API_KEY;
+  if (key) {
+    return generateWithProvider(prompt, mode, {
+      provider: "gemini",
+      apiKey: key,
       model: modelName,
-      systemInstruction: systemPrompt,
-      generationConfig: {
-        responseMimeType: "application/json"
-      }
     });
-
-    const result = await model.generateContent(`Analyze this code: \n\n${code} `);
-    const response = await result.response;
-    const text = response.text();
-
-    if (text) {
-      return JSON.parse(text);
-    } else {
-      throw new Error("Empty response from model");
-    }
-  } catch (error: any) {
-    console.error("Gemini API error:", error);
-
-    // Try Mistral Fallback for Explanation
-    if (process.env.MISTRAL_API_KEY) {
-      console.log("[Gemini] Explanation failed. Falling back to Mistral...");
-      try {
-        const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
-        const chatResponse = await client.chat.complete({
-          model: "codestral-latest",
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Analyze this code:\n\n${code}` }
-          ],
-          responseFormat: { type: "json_object" }
-        });
-
-        const text = chatResponse.choices?.[0].message.content;
-        if (typeof text === 'string') {
-          const jsonStr = text.replace(/^```json\s*|\s*```$/g, "").trim();
-          const parsed = JSON.parse(jsonStr);
-
-          if (Array.isArray(parsed)) {
-            return parsed;
-          } else if (typeof parsed === 'object' && parsed !== null) {
-            // Mistral json_object mode forces an object, but we need an array.
-            // Try to find the array in the object values.
-            const values = Object.values(parsed);
-            const arrayValue = values.find(val => Array.isArray(val));
-            if (arrayValue) return arrayValue;
-
-            // If no array found, implies we might need to enforce the structure in the prompt more strictly
-            // or return the object if it happens to match schema (unlikely for "array" requirement)
-          }
-          return parsed;
-        }
-      } catch (mistralError: any) {
-        console.error("Mistral Explanation Fallback error:", mistralError);
-      }
-    }
-
-    throw new Error(
-      `Failed to explain code: ${error instanceof Error ? error.message : "Unknown error"}`,
-    );
   }
+
+  // Try other environment variable fallbacks
+  if (process.env.MISTRAL_API_KEY) {
+    return generateWithProvider(prompt, mode, {
+      provider: "mistral",
+      apiKey: process.env.MISTRAL_API_KEY,
+    });
+  }
+
+  if (process.env.ANTHROPIC_API_KEY) {
+    return generateWithProvider(prompt, mode, {
+      provider: "anthropic",
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+  }
+
+  if (process.env.DEEPSEEK_API_KEY) {
+    return generateWithProvider(prompt, mode, {
+      provider: "deepseek",
+      apiKey: process.env.DEEPSEEK_API_KEY,
+    });
+  }
+
+  throw new Error("No API key configured. Please add an API key in Settings.");
+}
+
+// Legacy function for backward compatibility
+export async function explainCode(
+  code: string,
+  modelName: string = "gemini-1.5-pro"
+): Promise<any> {
+  const key = process.env.GEMINI_API_KEY;
+  if (key) {
+    return explainWithProvider(code, {
+      provider: "gemini",
+      apiKey: key,
+      model: modelName,
+    });
+  }
+
+  if (process.env.ANTHROPIC_API_KEY) {
+    return explainWithProvider(code, {
+      provider: "anthropic",
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+  }
+
+  if (process.env.MISTRAL_API_KEY) {
+    return explainWithProvider(code, {
+      provider: "mistral",
+      apiKey: process.env.MISTRAL_API_KEY,
+    });
+  }
+
+  throw new Error("No API key configured. Please add an API key in Settings.");
 }
 
 export async function analyzeHotspotFile(
   filePath: string,
   commitCount: number,
-  modelName: string = "gemini-2.0-flash-exp",
+  modelName: string = "gemini-2.0-flash-exp"
 ): Promise<string> {
   const prompt = `As a code quality expert, analyze this file: ${filePath}
 It has been changed ${commitCount} times recently.
 
-Provide a brief analysis(2 - 3 sentences) covering:
+Provide a brief analysis (2-3 sentences) covering:
 1. Why this file might be changing frequently
 2. Potential risks or concerns
 3. Recommendations for improvement
@@ -267,15 +553,13 @@ Keep it concise and actionable.`;
     const key = process.env.GEMINI_API_KEY;
     if (!key) return "Analysis unavailable (Missing API Key)";
 
-    const genAI = new GoogleGenerativeAI(key);
-    const model = genAI.getGenerativeModel({ model: modelName });
-
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text() || "Analysis unavailable";
+    return generateWithProvider(prompt, "explain", {
+      provider: "gemini",
+      apiKey: key,
+      model: modelName,
+    });
   } catch (error) {
-    console.error("Gemini API error:", error);
+    console.error("Hotspot analysis error:", error);
     return "Unable to generate analysis";
   }
 }
-

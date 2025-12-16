@@ -100,10 +100,22 @@ export default function Settings() {
   };
 
   const testApiKey = async (config: ModelConfig, type: "fast" | "pro") => {
+    // Validate input
     if (!config.provider || !config.apiKey) {
       toast({
         title: "Missing configuration",
         description: "Please select a provider and enter an API key first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Trim whitespace from API key
+    const trimmedApiKey = config.apiKey.trim();
+    if (!trimmedApiKey) {
+      toast({
+        title: "Invalid API Key",
+        description: "API key cannot be empty. Please enter a valid API key.",
         variant: "destructive",
       });
       return;
@@ -123,13 +135,20 @@ export default function Settings() {
         },
         body: JSON.stringify({
           provider: config.provider,
-          apiKey: config.apiKey,
-          model: config.model,
-          baseUrl: config.baseUrl,
+          apiKey: trimmedApiKey,
+          model: config.model || undefined,
+          baseUrl: config.baseUrl || undefined,
         }),
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        // If response is not JSON, read as text
+        const text = await response.text();
+        throw new Error(text || "Invalid response from server");
+      }
 
       if (response.ok && data.success) {
         setResult("success");
@@ -139,17 +158,21 @@ export default function Settings() {
         });
       } else {
         setResult("error");
+        const errorMsg = data?.error || data?.message || "The API key could not be verified.";
         toast({
-          title: "API Key Invalid",
-          description: data.error || "The API key could not be verified.",
+          title: "API Key Test Failed",
+          description: errorMsg,
           variant: "destructive",
         });
       }
     } catch (error) {
       setResult("error");
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "Could not connect to the server. Please check your connection and try again.";
       toast({
         title: "Test Failed",
-        description: "Could not connect to the server. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -344,6 +367,11 @@ export default function Settings() {
               Configure your AI providers. You need at least one API key to use AI features.
               Choose any provider you prefer - all major LLMs are supported! Each provider has
               different strengths: use Fast for quick responses, Pro for complex reasoning tasks.
+              <br />
+              <span className="text-xs text-muted-foreground mt-2 block">
+                💡 Tip: Make sure to copy the entire API key without any extra spaces. If testing fails, 
+                check the error message for specific guidance.
+              </span>
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
