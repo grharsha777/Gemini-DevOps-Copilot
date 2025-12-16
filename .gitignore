@@ -4,3 +4,8 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+# Local env files
+.env
+.env.*
+# Test scripts
+test-*.ts

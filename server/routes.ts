@@ -11,7 +11,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const schema = z.object({
         prompt: z.string().min(1),
         mode: z.enum(["generate", "test", "document", "refactor", "boilerplate"]),
-        model: z.enum(["gemini-2.0-flash", "gemini-1.5-pro"]).optional(),
+        model: z.enum(["gemini-2.0-flash", "gemini-2.0-flash-exp", "gemini-1.5-pro"]).optional(),
       });
 
       const { prompt, mode, model } = schema.parse(req.body);

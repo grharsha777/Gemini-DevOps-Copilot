@@ -16,7 +16,7 @@ export default function Copilot() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<AIMode>("generate");
-  const [model, setModel] = useState<AIModel>("gemini-2.0-flash");
+  const [model, setModel] = useState<AIModel>("gemini-2.0-flash-exp");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -109,7 +109,7 @@ export default function Copilot() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gemini-2.0-flash">Flash (Fast)</SelectItem>
+                  <SelectItem value="gemini-2.0-flash-exp">Flash (Fast)</SelectItem>
                   <SelectItem value="gemini-1.5-pro">Pro (Advanced)</SelectItem>
                 </SelectContent>
               </Select>
@@ -164,11 +164,10 @@ export default function Copilot() {
             className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <Card
-              className={`max-w-3xl p-4 ${
-                message.role === "user"
+              className={`max-w-3xl p-4 ${message.role === "user"
                   ? "bg-primary/10 border-primary/20"
                   : "bg-card/80 backdrop-blur-sm"
-              }`}
+                }`}
             >
               <div className="flex items-start justify-between gap-2 mb-2">
                 <Badge variant={message.role === "user" ? "default" : "secondary"}>

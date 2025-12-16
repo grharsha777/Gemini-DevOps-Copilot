@@ -23,7 +23,7 @@ export const aiModeSchema = z.enum([
 export type AIMode = z.infer<typeof aiModeSchema>;
 
 // AI Models
-export const aiModelSchema = z.enum(["gemini-2.0-flash", "gemini-1.5-pro"]);
+export const aiModelSchema = z.enum(["gemini-2.0-flash-exp", "gemini-1.5-pro"]);
 
 export type AIModel = z.infer<typeof aiModelSchema>;
 

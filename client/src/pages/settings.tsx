@@ -12,14 +12,14 @@ import type { AIModel } from "@shared/schema";
 
 export default function Settings() {
   const [githubPat, setGithubPat] = useState("");
-  const [aiModel, setAiModel] = useState<AIModel>("gemini-2.0-flash");
+  const [aiModel, setAiModel] = useState<AIModel>("gemini-2.0-flash-exp");
   const [showPat, setShowPat] = useState(false);
   const { toast } = useToast();
   const { theme } = useTheme();
 
   useEffect(() => {
     const savedPat = localStorage.getItem("githubPat") || "";
-    const savedModel = localStorage.getItem("aiModel") as AIModel || "gemini-2.0-flash";
+    const savedModel = localStorage.getItem("aiModel") as AIModel || "gemini-2.0-flash-exp";
     setGithubPat(savedPat);
     setAiModel(savedModel);
   }, []);
@@ -114,8 +114,8 @@ export default function Settings() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gemini-2.0-flash">
-                    Gemini 2.0 Flash (Faster, suitable for most tasks)
+                  <SelectItem value="gemini-2.0-flash-exp">
+                    Gemini 2.0 Flash Exp (Faster, suitable for most tasks)
                   </SelectItem>
                   <SelectItem value="gemini-1.5-pro">
                     Gemini 1.5 Pro (Advanced reasoning, complex tasks)
