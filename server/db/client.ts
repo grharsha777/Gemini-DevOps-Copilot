@@ -38,23 +38,23 @@ class DatabaseClient {
   }
 
   public async query<T extends QueryResultRow>(
-    text: string, 
+    text: string,
     params: QueryParams = []
   ): Promise<QueryResult<T>> {
     const start = Date.now();
     try {
       const res = await this.pool.query<T>(text, params);
       const duration = Date.now() - start;
-      logger.debug('Executed query', { 
-        query: text, 
+      logger.debug('Executed query', {
+        query: text,
         duration: `${duration}ms`,
-        rows: res.rowCount 
+        rows: res.rowCount
       });
       return res;
     } catch (error) {
-      logger.error('Database query error', { 
+      logger.error('Database query error', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        query: text, 
+        query: text,
         params
       });
       throw error;
@@ -65,7 +65,7 @@ class DatabaseClient {
     const client = await this.pool.connect();
     const query = client.query;
     const release = client.release;
-    
+
     // Set a timeout of 5 seconds
     const timeout = setTimeout(() => {
       const lastQuery = (client as any).lastQuery || 'No query executed';
@@ -76,9 +76,10 @@ class DatabaseClient {
     }, 5000);
 
     // Monkey patch the query method to keep track of the last query
-    (client as any).query = (...args: [string, QueryParams?]) => {
+    const originalQuery = client.query;
+    (client as any).query = (...args: any[]) => {
       (client as any).lastQuery = args[0];
-      return query.apply(client, args);
+      return originalQuery.apply(client, args as any);
     };
 
     client.release = () => {
@@ -114,7 +115,7 @@ class DatabaseClient {
       await this.pool.end();
       logger.info('Database connection pool closed');
     } catch (error) {
-      logger.error('Error closing database pool', { 
+      logger.error('Error closing database pool', {
         error: error instanceof Error ? error.message : 'Unknown error'
       });
       throw error;

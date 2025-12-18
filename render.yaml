@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: codexvortex-ai
+    name: gemini-devops-copilot
     runtime: node
     buildCommand: npm install && npm run build
     startCommand: npm run start

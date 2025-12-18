@@ -1,4 +1,4 @@
-# 🚀 Deployment Guide for CodeVortexAI
+# 🚀 Deployment Guide for Gemini DevOps Copilot
 
 Your CodeVortexAI app with Ganapathi App Builder features is ready for deployment!
 

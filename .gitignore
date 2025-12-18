@@ -9,3 +9,5 @@ vite.config.ts.*
 .env.*
 # Test scripts
 test-*.ts
+# Uploads
+uploads/

@@ -1,12 +1,12 @@
 {
-  "name": "rest-express",
+  "name": "gemini-devops-copilot",
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
   "scripts": {
     "dev": "cross-env NODE_ENV=development tsx server/index-dev.ts",
     "build": "vite build && esbuild server/index-prod.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/index.js",
-    "start": "npm ci --only=production && cross-env NODE_ENV=production node dist/index.js",
+    "start": "cross-env NODE_ENV=production node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
@@ -22,9 +22,9 @@
     "deploy": "node ./scripts/deploy.js"
   },
   "dependencies": {
-  "pg": "^8.11.0",
-  "passport-google-oauth20": "^2.0.0",
-  "passport-github2": "^0.1.12",
+    "pg": "^8.11.0",
+    "passport-google-oauth20": "^2.0.0",
+    "passport-github2": "^0.1.12",
     "@anthropic-ai/sdk": "^0.71.2",
     "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^3.10.0",
