@@ -69,3 +69,27 @@
 3.  **Explain Code:** Paste code into the input area and select "Explain" mode to get a breakdown.
 
 ## 🤝 Contributing
+
+
+We welcome contributions from developers of all experience levels. Whether you're fixing bugs, adding features, or improving documentation, your contributions are valuable to the Gemini-DevOps-Copilot project.
+
+To contribute:
+1. Fork the repository
+2. Create a feature branch (git checkout -b feature/amazing-feature)
+3. Commit your changes (git commit -m 'Add amazing feature')
+4. Push to the branch (git push origin feature/amazing-feature)
+5. Open a Pull Request
+
+## ECWoC 2026 Participation
+
+This project is actively participating in ECWoC (Elite Coders Winter of Code) 2026. We're looking for contributors to help improve this multimodal DevOps AI copilot.
+
+### ECWoC Contribution Areas:
+- Enhance AI model integration and fallback mechanisms
+- Improve error handling and logging
+- Expand documentation and code examples
+- Fix identified bugs and optimization issues
+- Add new AI provider integrations
+- Performance optimization improvements
+
+For ECWoC participants: Please ensure your pull requests include the ECWoC26 label to be eligible for scoring.
