@@ -328,6 +328,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.redirect('/');
   });
 
+  // Local authentication (email/password)
+  app.post('/api/auth/register', async (req, res) => {
+    try {
+      const { email, password, username } = req.body;
+      if (!email || !password || !username) {
+        return res.status(400).json({ error: 'Email, username, and password are required' });
+      }
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ error: 'User with this email already exists' });
+      }
+
+      const existingUsername = await storage.getUserByUsername(username);
+      if (existingUsername) {
+        return res.status(400).json({ error: 'Username already taken' });
+      }
+
+      // Create user with hashed password
+      const user = await storage.createUserWithPassword({ username, email, password });
+      
+      // Log in the user
+      req.login(user, (err) => {
+        if (err) {
+          return res.status(500).json({ error: 'Failed to log in after registration' });
+        }
+        res.json({ success: true, user: { id: user.id, username: user.username, email: user.email } });
+      });
+    } catch (err) {
+      console.error('Registration error:', err);
+      res.status(500).json({ error: 'Registration failed' });
+    }
+  });
+
+  app.post('/api/auth/login', (req, res, next) => {
+    passport.authenticate('local', (err: any, user: any, info: any) => {
+      if (err) {
+        return res.status(500).json({ error: 'Authentication error' });
+      }
+      if (!user) {
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
+      req.login(user, (loginErr) => {
+        if (loginErr) {
+          return res.status(500).json({ error: 'Login failed' });
+        }
+        res.json({ success: true, user: { id: user.id, username: user.username, email: user.email } });
+      });
+    })(req, res, next);
+  });
+
   app.get('/api/auth/me', (req, res) => {
     // user may be undefined
     // send minimal info

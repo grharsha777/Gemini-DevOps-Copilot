@@ -1,16 +1,19 @@
 import { randomUUID } from "crypto";
 import { pool } from "./db/client";
+import bcrypt from "bcryptjs";
 
 // User type definitions (if not in schema)
 export interface User {
   id: string;
   username: string;
   email?: string;
+  password?: string;
 }
 
 export interface InsertUser {
   username: string;
   email?: string;
+  password?: string;
 }
 
 // modify the interface with any CRUD methods
@@ -19,7 +22,9 @@ export interface InsertUser {
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  createUserWithPassword(user: { username: string; email: string; password: string }): Promise<User>;
   // Persist workflow runs fetched from CI providers
   saveWorkflowRuns(owner: string, repo: string, runs: any[]): Promise<void>;
   getWorkflowRuns(owner: string, repo: string, limit?: number): Promise<any[]>;
@@ -54,9 +59,28 @@ export class MemStorage implements IStorage {
     );
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.email === email,
+    );
+  }
+
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
     const user: User = { ...insertUser, id };
+    this.users.set(id, user);
+    return user;
+  }
+
+  async createUserWithPassword(data: { username: string; email: string; password: string }): Promise<User> {
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const id = randomUUID();
+    const user: User = { 
+      id, 
+      username: data.username, 
+      email: data.email, 
+      password: hashedPassword 
+    };
     this.users.set(id, user);
     return user;
   }
@@ -165,26 +189,40 @@ export class MemStorage implements IStorage {
 export class PostgresStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
     if (!pool) return undefined;
-    const res = await pool.query('SELECT id, username, email, role FROM users WHERE id = $1', [id]);
+    const res = await pool.query('SELECT id, username, email, password, role FROM users WHERE id = $1', [id]);
     if (res.rows.length === 0) return undefined;
     return res.rows[0];
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     if (!pool) return undefined;
-    const res = await pool.query('SELECT id, username, email, role FROM users WHERE username = $1', [username]);
+    const res = await pool.query('SELECT id, username, email, password, role FROM users WHERE username = $1', [username]);
+    if (res.rows.length === 0) return undefined;
+    return res.rows[0];
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    if (!pool) return undefined;
+    const res = await pool.query('SELECT id, username, email, password, role FROM users WHERE email = $1', [email]);
     if (res.rows.length === 0) return undefined;
     return res.rows[0];
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    if (!pool) {
-      const id = randomUUID();
-      return { id, username: insertUser.username, email: insertUser.email };
-    }
+    if (!pool) throw new Error('Database not available');
     const res = await pool.query(
-      'INSERT INTO users (username, email, role) VALUES ($1, $2, $3) RETURNING id, username, email, role',
-      [insertUser.username, insertUser.email || null, (insertUser as any).role || 'user'],
+      'INSERT INTO users (username, email, provider) VALUES ($1, $2, $3) RETURNING id, username, email, role',
+      [insertUser.username, insertUser.email || null, 'oauth'],
+    );
+    return res.rows[0];
+  }
+
+  async createUserWithPassword(data: { username: string; email: string; password: string }): Promise<User> {
+    if (!pool) throw new Error('Database not available');
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const res = await pool.query(
+      'INSERT INTO users (username, email, password, provider) VALUES ($1, $2, $3, $4) RETURNING id, username, email, role',
+      [data.username, data.email, hashedPassword, 'local'],
     );
     return res.rows[0];
   }

@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   username text UNIQUE NOT NULL,
   email text,
+  password text,
   provider text,
   provider_id text,
   role text DEFAULT 'user',
