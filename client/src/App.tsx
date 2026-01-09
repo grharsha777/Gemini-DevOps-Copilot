@@ -16,12 +16,16 @@ import AppBuilder from "@/pages/app-builder";
 import Playground from "@/pages/playground";
 import Settings from "@/pages/settings";
 import Community from "@/pages/community";
+import LoginPage from "@/pages/login";
+import SignupPage from "@/pages/signup";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/login" component={LoginPage} />
+      <Route path="/signup" component={SignupPage} />
       <Route path="/copilot" component={Copilot} />
       <Route path="/agent" component={Agent} />
       <Route path="/app-builder" component={AppBuilder} />

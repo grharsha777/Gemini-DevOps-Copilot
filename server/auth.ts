@@ -1,7 +1,9 @@
 import passport from 'passport';
 import { Strategy as GitHubStrategy } from 'passport-github2';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import { Strategy as LocalStrategy } from 'passport-local';
 import { storage } from './storage';
+import bcrypt from 'bcryptjs';
 
 const APP_BASE = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
 
@@ -75,4 +77,28 @@ export function configurePassport() {
       }
     }));
   }
+
+  // Local strategy (email/password)
+  passport.use(new LocalStrategy({
+    usernameField: 'email',
+    passwordField: 'password',
+  }, async (email: string, password: string, done: (err: any, user?: any) => void) => {
+    try {
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return done(null, false);
+      }
+      if (!user.password) {
+        return done(null, false);
+      }
+      const isValid = await bcrypt.compare(password, user.password);
+      if (!isValid) {
+        return done(null, false);
+      }
+      (user as any).provider = 'local';
+      done(null, user);
+    } catch (err) {
+      done(err as any);
+    }
+  }));
 }

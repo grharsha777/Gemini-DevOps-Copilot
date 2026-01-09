@@ -6,12 +6,14 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 
-export default function LoginPage() {
+export default function SignupPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [formData, setFormData] = useState({
+    username: '',
     email: '',
     password: '',
+    confirmPassword: '',
   });
   const [loading, setLoading] = useState(false);
 
@@ -24,14 +26,37 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (formData.password !== formData.confirmPassword) {
+      toast({
+        title: 'Error',
+        description: 'Passwords do not match',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      toast({
+        title: 'Error',
+        description: 'Password must be at least 6 characters',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          username: formData.username,
+          email: formData.email,
+          password: formData.password,
+        }),
       });
 
       const data = await response.json();
@@ -39,13 +64,13 @@ export default function LoginPage() {
       if (response.ok) {
         toast({
           title: 'Success',
-          description: 'Logged in successfully! Redirecting...',
+          description: 'Account created successfully! Redirecting...',
         });
         setTimeout(() => setLocation('/'), 1000);
       } else {
         toast({
           title: 'Error',
-          description: data.error || 'Invalid credentials',
+          description: data.error || 'Failed to create account',
           variant: 'destructive',
         });
       }
@@ -64,11 +89,23 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center p-6 bg-gradient-to-br from-background to-muted">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold">Sign In</CardTitle>
-          <CardDescription>Sign in to access Gemini DevOps Copilot</CardDescription>
+          <CardTitle className="text-2xl font-bold">Create an Account</CardTitle>
+          <CardDescription>Sign up to get started with Gemini DevOps Copilot</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                name="username"
+                type="text"
+                placeholder="johndoe"
+                value={formData.username}
+                onChange={handleChange}
+                required
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -93,8 +130,20 @@ export default function LoginPage() {
                 required
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                placeholder="••••••••"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                required
+              />
+            </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Signing In...' : 'Sign In'}
+              {loading ? 'Creating Account...' : 'Sign Up'}
             </Button>
           </form>
 
@@ -119,9 +168,9 @@ export default function LoginPage() {
         </CardContent>
         <CardFooter className="flex justify-center">
           <p className="text-sm text-muted-foreground">
-            Don't have an account?{' '}
-            <a href="/signup" className="text-primary hover:underline">
-              Sign up
+            Already have an account?{' '}
+            <a href="/login" className="text-primary hover:underline">
+              Sign in
             </a>
           </p>
         </CardFooter>
