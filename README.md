@@ -1,10 +1,11 @@
 # Code Vortex (Gemini-DevOps-Copilot)
 
-**Code Vortex** is a high-performance, multi-model DevOps AI copilot built by G R Harsha. It provides advanced intelligence for modern engineering teams, integrating leading LLMs like Google Gemini, Mistral, Anthropic Claude, and DeepSeek with a focus on robust DevOps automation and seamless code generation.
+**Code Vortex** is a high-performance, multi-model DevOps AI copilot built by G R Harsha. It provides advanced intelligence for modern engineering teams, integrating leading LLMs with a focus on robust DevOps automation, seamless code generation, and interactive learning.
 
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fgrharsha777%2FGemini-DevOps-Copilot)
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/grharsha777/Gemini-DevOps-Copilot)
 
-🌐 **Live Demo:** [https://gemini-devops-copilot.onrender.com/](https://gemini-devops-copilot.onrender.com/)
+🌐 **Live Demo:** [https://gemini-devops-copilot.vercel.app/](https://gemini-devops-copilot.vercel.app/)
 
 ## 🏗️ AI Request Lifecycle & Fallback Chain
 
@@ -24,63 +25,45 @@ graph TD
     DeepSeek --> |All Failed| Error[Crystal Clear Error Message]
 ```
 
-## 🚀 Key Features
+## 🚀 Key Modules
 
--   **Multi-Model Intelligence:** Seamlessly integrates with **Google Gemini**, **Anthropic Claude**, **Mistral AI**, and **DeepSeek**.
--   **Smart Fallback System:** Automatically switches between AI providers if one fails, ensuring 99.9% availability for your coding tasks.
--   **Built by G R Harsha:** Dedicated to providing a premium, developer-first AI experience.
--   **Core Capabilities:**
-    -   **Generate:** Create production-ready code scaffolds (package.json, tsconfig, Dockerfiles).
-    -   **Explain:** Get deep technical breakdowns of complex systems.
-    -   **Refactor:** Structural optimizations for performance and safety.
-    -   **DevOps:** Automated pipeline generation and hotspot risk analysis.
+### 1. 🎓 Learning Portal
+A unified search engine for developers. Aggregate resources from **YouTube, GitHub, and Dev.to** in real-time. Build custom learning paths and track your progress through DSA and System Design.
+
+### 2. 🏆 DevOps Leaderboard
+High-fidelity "8K" Glassmorphism UI tracking global contributor metrics. Monitor commits, PRs, and stars across the ecosystem with real-time ranking.
+
+### 3. 💻 Web IDE (Playground)
+Full-featured IDE with **Monaco Editor**, **Judge0** execution, and **Live Preview** iFrame. Browse the LeetCode-style problem set and jump straight into solving with pre-loaded context.
+
+### 4. 📱 Mobile App Builder
+Visual component management and property inspection for rapid mobile scaffold generation.
 
 ## 🛠️ Technology Stack
 
--   **Backend:** Node.js, Express, TypeScript
--   **Frontend:** React, Next.js components, Tailwind CSS, Framer Motion
--   **IDE Engine:** Monaco Editor (Studio Grade)
--   **Execution:** Judge0 / Piston Multi-language runtime
+-   **Backend:** Node.js, Express, TypeScript, Drizzle ORM
+-   **Frontend:** React, Framer Motion, Recharts, Tailwind CSS
+-   **AI:** Gemini Pro, Mistral (Codestral), Claude 3.5, DeepSeek V3
+-   **Infrastructure:** Vercel (Serverless), PostgreSQL (Neon)
 
 ## 📦 Installation & Setup
 
-1.  **Clone the repository:**
+1.  **Clone & Install:**
     ```bash
     git clone https://github.com/grharsha777/Gemini-DevOps-Copilot.git
-    cd Gemini-DevOps-Copilot
-    ```
-
-2.  **Install dependencies:**
-    ```bash
     npm install
     ```
 
-3.  **Configure Environment Variables:**
-    Create a `.env` file in the root directory. Add your keys. Priority: **Gemini -> Mistral -> Claude -> DeepSeek**.
+2.  **Environment Variables:**
+    Create a `.env` file with your AI API keys and `DATABASE_URL`.
 
-    ```env
-    GEMINI_API_KEY=your_key
-    MISTRAL_API_KEY=your_key
-    ANTHROPIC_API_KEY=your_key
-    DEEPSEEK_API_KEY=your_key
-    ```
-
-4.  **Start the Development Server:**
-    ```bash
-    npm run dev
-    ```
-    The application will run on `http://localhost:5000` (or similar, check terminal output).
-
-## 📖 Usage Guide
-
-1.  **AI Copilot Page:** Navigate to the Copilot section. Select your desired mode (Generate, Explain, Refactor, etc.), chose a model (optional, as auto-fallback handles verification), and enter your prompt.
-2.  **Settings:** Configure default preferences.
-3.  **Explain Code:** Paste code into the input area and select "Explain" mode to get a breakdown.
+3.  **Deployment (Vercel):**
+    Simply push to GitHub and connect to Vercel. Ensure all environment variables are added in the Vercel Dashboard.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Built with ❤️ by **G R Harsha**. Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📄 License
 
-This project is open-source.
+This project is open-source under the MIT License.

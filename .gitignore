@@ -15,3 +15,5 @@ uploads/
 logs/
 # Reserved names
 nul
+# Vercel
+.vercel
