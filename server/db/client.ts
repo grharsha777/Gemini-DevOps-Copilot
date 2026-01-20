@@ -1,4 +1,7 @@
-import { Pool, PoolConfig, PoolClient, QueryResult, QueryResultRow } from 'pg';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { Pool: PoolClass } = require('pg');
+import type { Pool, PoolConfig, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { logger } from '../utils/logger';
 
 type QueryParams = (string | number | boolean | null)[];
@@ -22,7 +25,7 @@ class DatabaseClient {
       ...config
     };
 
-    this.pool = new Pool(defaultConfig);
+    this.pool = new PoolClass(defaultConfig);
 
     this.pool.on('error', (err: Error) => {
       logger.error('Unexpected error on idle database client', { error: err });

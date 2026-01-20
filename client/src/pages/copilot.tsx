@@ -7,11 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Send, Sparkles, Code, TestTube, FileText, RefreshCw, Copy, Check, AlertCircle } from "lucide-react";
+import { Send, Sparkles, Code, TestTube, FileText, RefreshCw, Copy, Check, AlertCircle, Search } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { MultimodalInput, type MediaAttachment } from "@/components/multimodal-input";
+import { SimpleInput } from "@/components/simple-input";
+import { FormattedMessage } from "@/components/formatted-message";
 import type { ChatMessage, AIMode, AIModel, AIProvider } from "@shared/schema";
 
 export default function Copilot() {
@@ -45,11 +46,7 @@ export default function Copilot() {
   }, [messages]);
 
   const generateMutation = useMutation({
-    mutationFn: async (payload: any) => {
-      // payload can be [prompt, attachments] or { prompt, attachments }
-      const prompt = Array.isArray(payload) ? payload[0] : payload.prompt || payload;
-      const attachments: MediaAttachment[] | undefined = Array.isArray(payload) ? payload[1] : payload.attachments;
-
+    mutationFn: async (prompt: string) => {
       const userMessage: ChatMessage = {
         id: Date.now().toString(),
         role: "user",
@@ -60,35 +57,25 @@ export default function Copilot() {
 
       // Get API configuration for the selected tier
       const apiConfig = getApiConfig(modelTier);
-      
-      // Prepare FormData for multi-modal input
-      const formData = new FormData();
-      formData.append("prompt", prompt);
-      formData.append("mode", mode);
-      formData.append("modelTier", modelTier);
 
-      if (apiConfig) {
-        formData.append("provider", apiConfig.provider);
-        formData.append("apiKey", apiConfig.apiKey);
-        if (apiConfig.model) formData.append("model", apiConfig.model);
-        if (apiConfig.baseUrl) formData.append("baseUrl", apiConfig.baseUrl);
-      }
+      // Use simple text-based generation
+      const endpoint = mode === "research" ? "/api/ai/research" : "/api/ai/generate";
+      const body = mode === "research" ? { query: prompt } : {
+        prompt,
+        mode,
+        modelTier,
+        ...(apiConfig ? {
+          provider: apiConfig.provider,
+          apiKey: apiConfig.apiKey,
+          model: apiConfig.model,
+          baseUrl: apiConfig.baseUrl
+        } : {})
+      };
 
-      // Add attachments
-      if (attachments && attachments.length > 0) {
-        attachments.forEach((att, index) => {
-          formData.append(`attachment_${index}`, att.file);
-          formData.append(`attachment_${index}_type`, att.type);
-          if (att.content) {
-            formData.append(`attachment_${index}_content`, att.content);
-          }
-        });
-        formData.append("attachmentCount", attachments.length.toString());
-      }
-
-      const response = await fetch("/api/ai/generate-multimodal", {
+      const response = await fetch(endpoint, {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -112,7 +99,7 @@ export default function Copilot() {
       const errorMessage = error instanceof Error ? error.message : "Failed to generate response";
       toast({
         title: "Error",
-        description: errorMessage.includes("API key") 
+        description: errorMessage.includes("API key")
           ? "Please configure your API keys in Settings first."
           : errorMessage,
         variant: "destructive",
@@ -120,9 +107,9 @@ export default function Copilot() {
     },
   });
 
-  const handleSubmit = (message: string, attachments?: MediaAttachment[]) => {
-    if (!message.trim() && (!attachments || attachments.length === 0)) return;
-    generateMutation.mutate([message, attachments], { 
+  const handleSubmit = (message: string) => {
+    if (!message.trim()) return;
+    generateMutation.mutate(message, {
       onSuccess: () => setInput(""),
     });
   };
@@ -138,7 +125,7 @@ export default function Copilot() {
       case "generate": return <Code className="w-4 h-4" />;
       case "test": return <TestTube className="w-4 h-4" />;
       case "document": return <FileText className="w-4 h-4" />;
-      case "refactor": return <RefreshCw className="w-4 h-4" />;
+      case "research": return <Search className="w-4 h-4" />;
       default: return <Sparkles className="w-4 h-4" />;
     }
   };
@@ -153,7 +140,7 @@ export default function Copilot() {
               AI Coding Copilot
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Generate code, tests, documentation, and more with Gemini AI
+              Advanced DevOps AI Copilot - Built by G R Harsha. Generate code, tests, documentation, and more.
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -184,15 +171,11 @@ export default function Copilot() {
             </TabsTrigger>
             <TabsTrigger value="document" className="gap-1" data-testid="tab-document">
               {getModeIcon("document")}
-              <span className="hidden sm:inline">Document</span>
+              <span className="hidden sm:inline">Docs</span>
             </TabsTrigger>
-            <TabsTrigger value="refactor" className="gap-1" data-testid="tab-refactor">
-              {getModeIcon("refactor")}
-              <span className="hidden sm:inline">Refactor</span>
-            </TabsTrigger>
-            <TabsTrigger value="boilerplate" className="gap-1" data-testid="tab-boilerplate">
-              {getModeIcon("boilerplate")}
-              <span className="hidden sm:inline">Snippet</span>
+            <TabsTrigger value="research" className="gap-1" data-testid="tab-research">
+              {getModeIcon("research")}
+              <span className="hidden sm:inline">Research</span>
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -236,33 +219,16 @@ export default function Copilot() {
           >
             <Card
               className={`max-w-3xl p-4 ${message.role === "user"
-                  ? "bg-primary/10 border-primary/20"
-                  : "bg-card/80 backdrop-blur-sm"
+                ? "bg-primary/10 border-primary/20"
+                : "bg-card/80 backdrop-blur-sm"
                 }`}
             >
               <div className="flex items-start justify-between gap-2 mb-2">
                 <Badge variant={message.role === "user" ? "default" : "secondary"}>
                   {message.role === "user" ? "You" : "AI"}
                 </Badge>
-                {message.role === "assistant" && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => copyToClipboard(message.content, message.id)}
-                    data-testid={`button-copy-${message.id}`}
-                  >
-                    {copiedId === message.id ? (
-                      <Check className="w-3 h-3 text-green-500" />
-                    ) : (
-                      <Copy className="w-3 h-3" />
-                    )}
-                  </Button>
-                )}
               </div>
-              <pre className="whitespace-pre-wrap font-mono text-sm break-words">
-                {message.content}
-              </pre>
+              <FormattedMessage content={message.content} />
             </Card>
           </div>
         ))}
@@ -287,10 +253,10 @@ export default function Copilot() {
       </div>
 
       <div className="p-6 border-t border-border bg-card/50 backdrop-blur-sm">
-        <MultimodalInput
-          onSubmit={(data) => handleSubmit(input, data as MediaAttachment[])}
+        <SimpleInput
+          onSubmit={handleSubmit}
           isLoading={generateMutation.isPending}
-          placeholder={`Ask AI to ${mode === "generate" ? "write code" : mode === "test" ? "create tests" : mode === "document" ? "write documentation" : mode === "refactor" ? "refactor code" : "create a boilerplate"}... (or use voice/image/file input)`}
+          placeholder={`Ask your DevOps AI copilot to ${mode === "generate" ? "write code" : mode === "test" ? "create tests" : mode === "document" ? "write documentation" : mode === "refactor" ? "refactor code" : "create a boilerplate"}...`}
         />
       </div>
     </div>

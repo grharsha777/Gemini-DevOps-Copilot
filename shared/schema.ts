@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { pgTable, text, timestamp, jsonb, uuid, boolean } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
 
 // Chat Messages
 export const chatMessageSchema = z.object({
@@ -29,6 +31,7 @@ export const aiModeSchema = z.enum([
   "refactor",
   "explain",
   "boilerplate",
+  "research",
 ]);
 
 export type AIMode = z.infer<typeof aiModeSchema>;
@@ -43,6 +46,7 @@ export const aiProviderSchema = z.enum([
   "deepseek",    // DeepSeek
   "openrouter",  // OpenRouter (access to many models)
   "huggingface", // Hugging Face Inference API
+  "kimi",        // Kimi AI (Moonshot AI)
   "custom",      // Custom OpenAI-compatible endpoint
 ]);
 
@@ -64,9 +68,9 @@ export const aiModelSchema = z.enum(["fast", "pro"]);
 export type AIModel = z.infer<typeof aiModelSchema>;
 
 // Provider info for UI display with helpful notes
-export const providerInfoMap: Record<AIProvider, { 
-  name: string; 
-  url: string; 
+export const providerInfoMap: Record<AIProvider, {
+  name: string;
+  url: string;
   models: string[];
   note: string; // Short note about the provider
 }> = {
@@ -117,6 +121,12 @@ export const providerInfoMap: Record<AIProvider, {
     url: "https://huggingface.co/settings/tokens",
     models: ["meta-llama/Llama-3.1-8B-Instruct", "mistralai/Mistral-7B-Instruct-v0.2", "google/gemma-2-9b-it", "Qwen/Qwen2.5-7B-Instruct"],
     note: "Open-source models via Inference API. Free tier available. Great for experimentation with open models.",
+  },
+  kimi: {
+    name: "Kimi AI (Moonshot)",
+    url: "https://platform.moonshot.cn/console/api-keys",
+    models: ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"],
+    note: "Chinese AI service with long context support. OpenAI-compatible API. Good for Chinese language tasks.",
   },
   custom: {
     name: "Custom API",
@@ -207,8 +217,8 @@ export const gitProviderSchema = z.enum([
 export type GitProvider = z.infer<typeof gitProviderSchema>;
 
 // Git Provider Info
-export const gitProviderInfoMap: Record<GitProvider, { 
-  name: string; 
+export const gitProviderInfoMap: Record<GitProvider, {
+  name: string;
   url: string;
   tokenUrl: string;
   note: string;
@@ -257,4 +267,51 @@ export const userSettingsSchema = z.object({
 });
 
 export type UserSettings = z.infer<typeof userSettingsSchema>;
+
+// Mobile Projects Table
+export const mobileProjects = pgTable("mobile_projects", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  description: text("description"),
+  userId: text("user_id").notNull(), // Matching the string id pattern in storage.ts
+  status: text("status").default("draft"), // draft, building, deployed
+  config: jsonb("config").$type<{
+    primaryColor: string;
+    borderRadius: number;
+    fontFamily: string;
+  }>(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// App Screens Table
+export const appScreens = pgTable("app_screens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id").references(() => mobileProjects.id),
+  name: text("name").notNull(),
+  layout: jsonb("layout").notNull(),
+  isInitial: boolean("is_initial").default(false),
+});
+
+// Build History Table
+export const buildHistory = pgTable("build_history", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id").references(() => mobileProjects.id),
+  platform: text("platform").notNull(), // ios, android
+  status: text("status").notNull(),
+  buildUrl: text("build_url"),
+  logs: text("logs"),
+  version: text("version").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Zod schemas for the new tables
+export const insertMobileProjectSchema = createInsertSchema(mobileProjects).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAppScreenSchema = createInsertSchema(appScreens).omit({ id: true });
+export const insertBuildHistorySchema = createInsertSchema(buildHistory).omit({ id: true, createdAt: true });
+
+export type MobileProject = typeof mobileProjects.$inferSelect;
+export type InsertMobileProject = z.infer<typeof insertMobileProjectSchema>;
+export type AppScreen = typeof appScreens.$inferSelect;
+export type BuildHistory = typeof buildHistory.$inferSelect;
 

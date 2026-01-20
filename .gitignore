@@ -11,3 +11,7 @@ vite.config.ts.*
 test-*.ts
 # Uploads
 uploads/
+# Logs
+logs/
+# Reserved names
+nul

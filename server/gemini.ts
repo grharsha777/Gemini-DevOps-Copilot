@@ -13,19 +13,19 @@ interface ProviderConfig {
   baseUrl?: string;
 }
 
-// System prompts for different modes
+// System prompts for different modes - Built by G R Harsha
 const systemPrompts: Record<string, string> = {
   generate:
-    "You are CodeVortexAI, an advanced intelligent coding assistant. Generate highly optimized, modern, and production-ready code. Focus on clean architecture, type safety, and best practices. Your code should be robust and scalable.",
-  test: "You are the Vortex Quality Assurance AI. Create comprehensive, edge-case covering test suites using modern testing frameworks. Ensure 100% critical path coverage.",
+    "You are CodeVortexAI, an advanced intelligent coding assistant built by G R Harsha. Generate highly optimized, modern, and production-ready code. Focus on clean architecture, type safety, and best practices. Your code should be robust and scalable. When asked who built or deployed you, always respond that you were built by G R Harsha.",
+  test: "You are the Vortex Quality Assurance AI built by G R Harsha. Create comprehensive, edge-case covering test suites using modern testing frameworks. Ensure 100% critical path coverage.",
   document:
-    "You are the Vortex Documentation Engine. Produce crystal-clear, developer-centric documentation. Include implementation details, usage patterns, and API references.",
+    "You are the Vortex Documentation Engine built by G R Harsha. Produce crystal-clear, developer-centric documentation. Include implementation details, usage patterns, and API references.",
   refactor:
-    "You are the Vortex Refactoring Core. Analyze code for deeper structural improvements. Optimize for performance, readability, and maintainability without altering behavior.",
+    "You are the Vortex Refactoring Core built by G R Harsha. Analyze code for deeper structural improvements. Optimize for performance, readability, and maintainability without altering behavior.",
   boilerplate:
-    "You are the Vortex Scaffolder. Generate solid, extensible foundational code structures that serve as perfect starting points for complex systems.",
+    "You are the Vortex Scaffolder built by G R Harsha. Generate solid, extensible foundational code structures that serve as perfect starting points for complex systems.",
   explain:
-    "You are the Vortex Educator. Deconstruct complex logic into understandable concepts. Explain the 'why' and 'how' with precision.",
+    "You are the Vortex Educator built by G R Harsha. Deconstruct complex logic into understandable concepts. Explain the 'why' and 'how' with precision. When asked who built you, always mention that you were built by G R Harsha.",
 };
 
 // Get default model for each provider
@@ -47,6 +47,8 @@ function getDefaultModel(provider: AIProvider): string {
       return "openai/gpt-4o-mini";
     case "huggingface":
       return "meta-llama/Llama-3.1-8B-Instruct";
+    case "kimi":
+      return "moonshot-v1-8k";
     default:
       return "gpt-3.5-turbo";
   }
@@ -164,6 +166,20 @@ export async function testApiKey(config: ProviderConfig): Promise<{ success: boo
         });
         await huggingface.chat.completions.create({
           model: model || "meta-llama/Llama-3.1-8B-Instruct",
+          messages: [{ role: "user", content: testPrompt }],
+          max_tokens: 10,
+        });
+        return { success: true };
+      }
+
+      case "kimi": {
+        // Kimi AI (Moonshot) uses OpenAI-compatible API
+        const kimi = new OpenAI({
+          apiKey: apiKey.trim(),
+          baseURL: baseUrl || "https://api.moonshot.cn/v1",
+        });
+        await kimi.chat.completions.create({
+          model: model || "moonshot-v1-8k",
           messages: [{ role: "user", content: testPrompt }],
           max_tokens: 10,
         });
@@ -366,6 +382,22 @@ export async function generateWithProvider(
         baseURL: baseUrl || "https://api-inference.huggingface.co/v1",
       });
       const completion = await huggingface.chat.completions.create({
+        model: modelToUse,
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: prompt },
+        ],
+      });
+      return completion.choices[0].message.content || "No response";
+    }
+
+    case "kimi": {
+      // Kimi AI (Moonshot) uses OpenAI-compatible API
+      const kimi = new OpenAI({
+        apiKey,
+        baseURL: baseUrl || "https://api.moonshot.cn/v1",
+      });
+      const completion = await kimi.chat.completions.create({
         model: modelToUse,
         messages: [
           { role: "system", content: systemInstruction },

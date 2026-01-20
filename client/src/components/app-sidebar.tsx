@@ -1,4 +1,4 @@
-import { Home, Code, FileText, BarChart3, Settings, Sparkles, Bot, Users } from "lucide-react";
+import { Home, Code, FileText, BarChart3, Settings, Sparkles, Bot, Users, Smartphone, GraduationCap } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -39,9 +39,14 @@ const menuItems = [
     icon: BarChart3,
   },
   {
-    title: "App Builder",
-    url: "/app-builder",
+    title: "Ganapathi Builder",
+    url: "/ganapathi-builder",
     icon: Code,
+  },
+  {
+    title: "Mobile Builder",
+    url: "/mobile-builder",
+    icon: Smartphone,
   },
   {
     title: "Playground",
@@ -52,6 +57,11 @@ const menuItems = [
     title: "Community",
     url: "/community",
     icon: Users,
+  },
+  {
+    title: "Learning Center",
+    url: "/learning",
+    icon: GraduationCap,
   },
   {
     title: "Settings",

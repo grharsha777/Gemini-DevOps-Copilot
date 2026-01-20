@@ -6,7 +6,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { db } from "@/lib/db";
+import { useToast } from "@/hooks/use-toast";
 import {
   Star,
   GitFork,
@@ -22,7 +27,8 @@ import {
   Play,
   Code,
   Globe,
-  Zap
+  Zap,
+  Plus
 } from "lucide-react";
 
 interface Project {
@@ -48,7 +54,21 @@ interface Project {
   techStack: string[];
 }
 
+interface Comment {
+  id: string;
+  projectId: string;
+  author: {
+    name: string;
+    avatar?: string;
+    username: string;
+  };
+  content: string;
+  createdAt: Date;
+  likes: number;
+}
+
 interface LeaderboardEntry {
+  id: string;
   rank: number;
   user: {
     name: string;
@@ -61,7 +81,7 @@ interface LeaderboardEntry {
   totalStars: number;
 }
 
-// Mock data for demonstration
+// Mock data for seeding
 const MOCK_PROJECTS: Project[] = [
   {
     id: "1",
@@ -128,6 +148,7 @@ const MOCK_PROJECTS: Project[] = [
 
 const MOCK_LEADERBOARD: LeaderboardEntry[] = [
   {
+    id: "1",
     rank: 1,
     user: { name: "Sarah Chen", username: "sarahdev", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=sarah" },
     score: 2450,
@@ -136,6 +157,7 @@ const MOCK_LEADERBOARD: LeaderboardEntry[] = [
     totalStars: 1847
   },
   {
+    id: "2",
     rank: 2,
     user: { name: "Marcus Rodriguez", username: "marcuscode", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=marcus" },
     score: 2130,
@@ -144,6 +166,7 @@ const MOCK_LEADERBOARD: LeaderboardEntry[] = [
     totalStars: 1456
   },
   {
+    id: "3",
     rank: 3,
     user: { name: "Emma Thompson", username: "emmathompson", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=emma" },
     score: 1980,
@@ -154,12 +177,108 @@ const MOCK_LEADERBOARD: LeaderboardEntry[] = [
 ];
 
 export function CommunityHub() {
-  const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(MOCK_LEADERBOARD);
+  const { toast } = useToast();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("stars");
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [showPublishDialog, setShowPublishDialog] = useState(false);
+  const [newProject, setNewProject] = useState<Partial<Project>>({
+    title: "",
+    description: "",
+    category: "Web App",
+    tags: [],
+    techStack: []
+  });
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [localProjects, setLocalProjects] = useState<any[]>([]);
+  const [selectedLocalProject, setSelectedLocalProject] = useState<string>("");
+
+  useEffect(() => {
+    loadData();
+    loadLocalProjects();
+  }, []);
+
+  const loadLocalProjects = async () => {
+      try {
+          const projects = await db.getAll('projects');
+          setLocalProjects(projects);
+      } catch (e) {
+          console.error("Failed to load local projects", e);
+      }
+  };
+
+  const loadData = async () => {
+    try {
+      let loadedProjects = await db.getAll<Project>('community_projects');
+      let loadedUsers = await db.getAll<LeaderboardEntry>('community_users');
+      let loadedComments = await db.getAll<Comment>('community_comments');
+
+      if (loadedProjects.length === 0) {
+        // Seed data
+        for (const p of MOCK_PROJECTS) {
+            await db.put('community_projects', p);
+        }
+        loadedProjects = MOCK_PROJECTS;
+      }
+      
+      if (loadedUsers.length === 0) {
+         for (const u of MOCK_LEADERBOARD) {
+            await db.put('community_users', u);
+         }
+         loadedUsers = MOCK_LEADERBOARD;
+      }
+
+      setProjects(loadedProjects);
+      setLeaderboard(loadedUsers);
+      setComments(loadedComments);
+    } catch (error) {
+      console.error("Failed to load community data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load community data. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handlePostComment = async () => {
+      if (!selectedProject || !newComment.trim()) return;
+
+      const comment: Comment = {
+          id: Date.now().toString(),
+          projectId: selectedProject.id,
+          author: {
+              name: "You",
+              username: "current-user",
+              avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=current"
+          },
+          content: newComment,
+          createdAt: new Date(),
+          likes: 0
+      };
+
+      try {
+          await db.put('community_comments', comment);
+          setComments(prev => [...prev, comment]);
+          setNewComment("");
+          toast({ title: "Comment posted", description: "Your comment has been added." });
+      } catch (e) {
+          console.error(e);
+          toast({ title: "Error", description: "Failed to post comment", variant: "destructive" });
+      }
+  };
+
+  const calculateTrendingScore = (p: Project) => {
+    // Trending algorithm: (views×0.3 + stars×0.5 + forks×0.2) with time decay
+    const baseScore = (p.views * 0.3) + (p.stars * 0.5) + (p.forks * 0.2);
+    const daysSinceCreation = (Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+    // Simple decay: score / (days + 1)
+    return baseScore / (daysSinceCreation + 1);
+  };
 
   const filteredProjects = projects
     .filter(project =>
@@ -172,39 +291,104 @@ export function CommunityHub() {
       switch (sortBy) {
         case "stars": return b.stars - a.stars;
         case "views": return b.views - a.views;
-        case "recent": return b.updatedAt.getTime() - a.updatedAt.getTime();
+        case "recent": return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        case "trending": return calculateTrendingScore(b) - calculateTrendingScore(a);
         default: return 0;
       }
     });
 
   const categories = ["all", ...Array.from(new Set(projects.map(p => p.category)))];
 
-  const handleStar = (projectId: string) => {
-    setProjects(prev => prev.map(p =>
-      p.id === projectId ? { ...p, stars: p.stars + 1 } : p
-    ));
+  const handleStar = async (projectId: string) => {
+    try {
+      const project = projects.find(p => p.id === projectId);
+      if (!project) return;
+      
+      const updatedProject = { ...project, stars: project.stars + 1 };
+      await db.put('community_projects', updatedProject);
+      
+      setProjects(prev => prev.map(p =>
+        p.id === projectId ? updatedProject : p
+      ));
+      
+      toast({ title: "Starred!", description: "Project added to your favorites." });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleFork = async (project: Project) => {
-    // Simulate forking
-    const forkedProject: Project = {
-      ...project,
-      id: Date.now().toString(),
-      title: `${project.title} (Fork)`,
-      author: {
-        name: "You",
-        username: "current-user",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=current"
-      },
-      stars: 0,
-      forks: 0,
-      views: 0,
-      createdAt: new Date(),
-      updatedAt: new Date()
+    try {
+        const forkedProject: Project = {
+          ...project,
+          id: Date.now().toString(),
+          title: `${project.title} (Fork)`,
+          author: {
+            name: "You",
+            username: "current-user",
+            avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=current"
+          },
+          stars: 0,
+          forks: 0,
+          views: 0,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        await db.put('community_projects', forkedProject);
+        
+        // Update original project fork count
+        const originalUpdated = { ...project, forks: project.forks + 1 };
+        await db.put('community_projects', originalUpdated);
+
+        setProjects(prev => [forkedProject, ...prev.map(p => p.id === project.id ? originalUpdated : p)]);
+        
+        toast({ title: "Forked!", description: "Project forked successfully to your workspace." });
+    } catch (e) {
+        console.error(e);
+    }
+  };
+
+  const handlePublish = async () => {
+    if (!newProject.title || !newProject.description) {
+        toast({ title: "Error", description: "Title and description are required", variant: "destructive" });
+        return;
+    }
+
+    // If a local project is selected, use its files/structure (in a real app)
+    // For now, we just link the ID or metadata
+    
+    const project: Project = {
+        id: Date.now().toString(),
+        title: newProject.title,
+        description: newProject.description,
+        author: {
+            name: "You",
+            username: "current-user",
+            avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=current"
+        },
+        tags: newProject.tags || [],
+        stars: 0,
+        forks: 0,
+        views: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isLive: false,
+        category: newProject.category || "Web App",
+        techStack: newProject.techStack || []
     };
 
-    setProjects(prev => [forkedProject, ...prev]);
-    alert("Project forked successfully!");
+    try {
+        await db.put('community_projects', project);
+        setProjects(prev => [project, ...prev]);
+        setShowPublishDialog(false);
+        setNewProject({ title: "", description: "", category: "Web App", tags: [], techStack: [] });
+        setSelectedLocalProject("");
+        toast({ title: "Published!", description: "Your project is now live in the community." });
+    } catch (e) {
+        console.error(e);
+        toast({ title: "Error", description: "Failed to publish project", variant: "destructive" });
+    }
   };
 
   return (
@@ -223,6 +407,10 @@ export function CommunityHub() {
             <Trophy className="w-4 h-4 mr-1" />
             {leaderboard.length} Contributors
           </Badge>
+          <Button onClick={() => setShowPublishDialog(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Publish Project
+          </Button>
         </div>
       </div>
 
@@ -506,6 +694,83 @@ export function CommunityHub() {
         </TabsContent>
       </Tabs>
 
+      {/* Publish Project Dialog */}
+      <Dialog open={showPublishDialog} onOpenChange={setShowPublishDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Publish New Project</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {localProjects.length > 0 && (
+                <div className="space-y-2">
+                    <Label>Import from Workspace (Optional)</Label>
+                    <Select
+                        value={selectedLocalProject}
+                        onValueChange={(val) => {
+                            setSelectedLocalProject(val);
+                            const p = localProjects.find(lp => lp.id === val);
+                            if (p) {
+                                setNewProject({
+                                    ...newProject,
+                                    title: p.name,
+                                    description: p.description || "",
+                                    category: p.type === 'mobile' ? 'Mobile App' : 'Web App'
+                                });
+                            }
+                        }}
+                    >
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select a project..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {localProjects.map(p => (
+                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
+            <div className="space-y-2">
+              <Label>Project Title</Label>
+              <Input
+                placeholder="My Awesome Project"
+                value={newProject.title}
+                onChange={(e) => setNewProject({ ...newProject, title: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Textarea
+                placeholder="Describe your project..."
+                value={newProject.description}
+                onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select
+                value={newProject.category}
+                onValueChange={(value) => setNewProject({ ...newProject, category: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Web App">Web App</SelectItem>
+                  <SelectItem value="Mobile App">Mobile App</SelectItem>
+                  <SelectItem value="Library">Library</SelectItem>
+                  <SelectItem value="Tool">Tool</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPublishDialog(false)}>Cancel</Button>
+            <Button onClick={handlePublish}>Publish</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Project Detail Dialog */}
       <Dialog open={!!selectedProject} onOpenChange={() => setSelectedProject(null)}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
@@ -555,6 +820,52 @@ export function CommunityHub() {
                       </a>
                     </Button>
                   )}
+                </div>
+
+                <div className="border-t pt-6">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5" />
+                    Comments
+                  </h3>
+                  
+                  <ScrollArea className="h-[200px] mb-4 pr-4">
+                    <div className="space-y-4">
+                      {comments.filter(c => c.projectId === selectedProject.id).map(comment => (
+                        <div key={comment.id} className="flex gap-3">
+                          <Avatar className="w-8 h-8">
+                            <AvatarImage src={comment.author.avatar} />
+                            <AvatarFallback>{comment.author.name[0]}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-sm">{comment.author.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(comment.createdAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{comment.content}</p>
+                          </div>
+                        </div>
+                      ))}
+                      {comments.filter(c => c.projectId === selectedProject.id).length === 0 && (
+                        <div className="text-center text-muted-foreground py-8">
+                          No comments yet. Be the first to share your thoughts!
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+
+                  <div className="flex gap-2">
+                    <Input 
+                      placeholder="Add a comment..." 
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handlePostComment()}
+                    />
+                    <Button onClick={handlePostComment} size="icon">
+                      <MessageSquare className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </>

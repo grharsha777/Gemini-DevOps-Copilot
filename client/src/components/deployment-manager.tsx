@@ -21,6 +21,7 @@ import {
   Download,
   Upload
 } from "lucide-react";
+import { DevOpsLeaderboard } from "./devops-leaderboard";
 
 interface DeploymentManagerProps {
   projectFiles: Array<{ path: string; content: string }>;
@@ -32,7 +33,11 @@ interface DeploymentStatus {
   platform: string;
   status: 'idle' | 'deploying' | 'success' | 'error';
   url?: string;
+  repoUrl?: string;
   error?: string;
+  id?: string;
+  timestamp?: number;
+  logs?: string[];
 }
 
 const DEPLOYMENT_PLATFORMS = [
@@ -76,10 +81,17 @@ export function DeploymentManager({ projectFiles, projectName, onDeploymentCompl
   const [githubUsername, setGithubUsername] = useState("");
   const [githubToken, setGithubToken] = useState("");
   const [isDeploying, setIsDeploying] = useState(false);
+  const [showLogs, setShowLogs] = useState<string | null>(null);
 
   const deployToPlatform = async (platform: string) => {
     if (!projectFiles.length) {
       alert("No files to deploy!");
+      return;
+    }
+
+    // Check if GitHub credentials are needed
+    if ((platform === "github-pages" || platform.includes("github")) && (!githubUsername || !githubToken)) {
+      alert("Please provide GitHub username and token in the GitHub Setup tab before deploying.");
       return;
     }
 
@@ -89,7 +101,9 @@ export function DeploymentManager({ projectFiles, projectName, onDeploymentCompl
     // Add deployment status
     setDeployments(prev => [...prev, {
       platform,
-      status: 'deploying'
+      status: 'deploying',
+      id: deploymentId,
+      timestamp: Date.now()
     }]);
 
     try {
@@ -105,30 +119,41 @@ export function DeploymentManager({ projectFiles, projectName, onDeploymentCompl
         })
       });
 
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}: ${response.statusText}` }));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
       const result = await response.json();
 
       if (result.success) {
         setDeployments(prev => prev.map(d =>
           d.platform === platform
-            ? { ...d, status: 'success', url: result.url }
+            ? { ...d, status: 'success', url: result.url, repoUrl: result.repoUrl }
             : d
         ));
 
         onDeploymentComplete?.(result.url, platform);
 
         // Copy URL to clipboard
-        navigator.clipboard.writeText(result.url);
-        alert(`Deployment successful! URL copied to clipboard: ${result.url}`);
+        try {
+          await navigator.clipboard.writeText(result.url);
+          alert(`Deployment successful! URL copied to clipboard: ${result.url}\n\nRepository: ${result.repoUrl || 'N/A'}`);
+        } catch (clipboardError) {
+          alert(`Deployment successful! URL: ${result.url}\n\nRepository: ${result.repoUrl || 'N/A'}`);
+        }
       } else {
         throw new Error(result.error || 'Deployment failed');
       }
     } catch (error) {
       console.error('Deployment error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       setDeployments(prev => prev.map(d =>
         d.platform === platform
-          ? { ...d, status: 'error', error: error instanceof Error ? error.message : 'Unknown error' }
+          ? { ...d, status: 'error', error: errorMessage }
           : d
       ));
+      alert(`Deployment failed: ${errorMessage}`);
     } finally {
       setIsDeploying(false);
     }
@@ -168,39 +193,54 @@ export function DeploymentManager({ projectFiles, projectName, onDeploymentCompl
       {deployments.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Deployment Status</CardTitle>
+            <CardTitle>Deployment History</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               {deployments.map((deployment, index) => (
-                <div key={index} className="flex items-center justify-between p-3 border rounded">
-                  <div className="flex items-center gap-3">
-                    {getStatusIcon(deployment.status)}
-                    <div>
-                      <div className="font-medium capitalize">{deployment.platform.replace('-', ' ')}</div>
-                      {deployment.status === 'success' && deployment.url && (
-                        <div className="text-sm text-muted-foreground flex items-center gap-2">
-                          <ExternalLink className="w-3 h-3" />
-                          {deployment.url}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => copyToClipboard(deployment.url!)}
-                          >
-                            <Copy className="w-3 h-3" />
-                          </Button>
+                <div key={index} className="flex flex-col gap-2 p-3 border rounded bg-slate-900/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {getStatusIcon(deployment.status)}
+                      <div>
+                        <div className="font-medium capitalize">{deployment.platform.replace('-', ' ')}</div>
+                        <div className="text-xs text-slate-500">
+                          {deployment.timestamp ? new Date(deployment.timestamp).toLocaleString() : 'Just now'}
                         </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {deployment.logs && (
+                        <Button size="sm" variant="outline" onClick={() => setShowLogs(showLogs === deployment.id ? null : deployment.id!)}>
+                          {showLogs === deployment.id ? 'Hide Logs' : 'Logs'}
+                        </Button>
                       )}
-                      {deployment.status === 'error' && (
-                        <div className="text-sm text-red-500">{deployment.error}</div>
+                      {deployment.status === 'success' && deployment.url && (
+                        <>
+                          <Button size="sm" onClick={() => window.open(deployment.url, '_blank')}>
+                            Visit <ExternalLink className="w-3 h-3 ml-2" />
+                          </Button>
+                          {deployment.repoUrl && (
+                            <Button size="sm" variant="outline" onClick={() => window.open(deployment.repoUrl, '_blank')}>
+                              <Github className="w-3 h-3 mr-2" /> Repo
+                            </Button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
-                  {deployment.status === 'success' && deployment.url && (
-                    <Button size="sm" onClick={() => window.open(deployment.url, '_blank')}>
-                      <ExternalLink className="w-4 h-4 mr-1" />
-                      Visit
-                    </Button>
+
+                  {/* Logs Viewer */}
+                  {showLogs === deployment.id && deployment.logs && (
+                    <div className="mt-2 bg-black p-3 rounded text-xs font-mono text-green-400 h-32 overflow-y-auto">
+                      {deployment.logs.map((log, i) => (
+                        <div key={i}>{log}</div>
+                      ))}
+                    </div>
+                  )}
+
+                  {deployment.status === 'error' && (
+                    <div className="text-sm text-red-500 bg-red-900/20 p-2 rounded">{deployment.error}</div>
                   )}
                 </div>
               ))}
@@ -372,6 +412,10 @@ export function DeploymentManager({ projectFiles, projectName, onDeploymentCompl
                 </div>
               </CardContent>
             </Card>
+
+            <div className="md:col-span-2">
+              <DevOpsLeaderboard />
+            </div>
           </div>
         </TabsContent>
       </Tabs>

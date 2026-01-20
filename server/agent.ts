@@ -16,6 +16,7 @@ interface ProviderConfig {
 }
 
 interface AgentContext {
+  projectId?: string;
   repository?: {
     provider: GitProvider;
     owner: string;
@@ -83,7 +84,7 @@ export class AgentSystem {
   }
 
   // Run agent task with multi-LLM approach
-  async runTask(context: AgentContext): Promise<{
+  async runTask(context: AgentContext, storage?: any): Promise<{
     summary: string;
     code?: string;
     zipUrl?: string;
@@ -91,30 +92,57 @@ export class AgentSystem {
   }> {
     const steps: string[] = [];
     let result: any = {};
+    let projectContext = "";
 
     try {
+      // Step 0: Fetch project context if projectId is provided
+      if (context.projectId && storage) {
+        steps.push("Fetching project context...");
+        try {
+          const files = await storage.listProjectFiles(context.projectId);
+          if (files && files.length > 0) {
+            projectContext = "Project Structure:\n";
+            for (const file of files) {
+              projectContext += `- ${file.path}\n`;
+            }
+            // Fetch content of top 5 files for better context
+            const topFiles = files.slice(0, 5);
+            projectContext += "\nFile Contents (Snippets):\n";
+            for (const file of topFiles) {
+              const fullFile = await storage.getProjectFile(context.projectId, file.path);
+              if (fullFile && fullFile.content) {
+                projectContext += `\n--- ${file.path} ---\n${fullFile.content.substring(0, 1000)}\n`;
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Failed to fetch project context:", err);
+          steps.push("Warning: Project context retrieval failed.");
+        }
+      }
+
       // Step 1: High-level planning with Pro model
       steps.push("Planning with Pro model...");
-      const planningPrompt = this.buildPlanningPrompt(context);
+      const planningPrompt = this.buildPlanningPrompt(context, projectContext);
       const plan = await this.planWithPro(planningPrompt);
-      steps.push(`Plan: ${plan.substring(0, 100)}...`);
+      steps.push(`Plan created.`);
 
       // Step 2: Execute based on action type
       if (context.action === "develop") {
         steps.push("Developing application...");
         result = await this.developApp(context, plan);
-      } else if (context.action === "enhance" && context.repository) {
+      } else if (context.action === "enhance" && (context.repository || context.projectId)) {
         steps.push("Enhancing repository...");
-        result = await this.enhanceRepository(context, plan);
-      } else if (context.action === "debug" && context.repository) {
+        result = await this.enhanceRepository(context, plan, projectContext);
+      } else if (context.action === "debug" && (context.repository || context.projectId)) {
         steps.push("Debugging repository...");
-        result = await this.debugRepository(context, plan);
-      } else if (context.action === "explain" && context.repository) {
+        result = await this.debugRepository(context, plan, projectContext);
+      } else if (context.action === "explain" && (context.repository || context.projectId)) {
         steps.push("Explaining codebase...");
-        result = await this.explainRepository(context, plan);
+        result = await this.explainRepository(context, plan, projectContext);
       } else if (context.action === "custom") {
         steps.push("Executing custom action...");
-        result = await this.executeCustomAction(context, plan);
+        result = await this.executeCustomAction(context, plan, projectContext);
       }
 
       return {
@@ -128,13 +156,17 @@ export class AgentSystem {
     }
   }
 
-  private buildPlanningPrompt(context: AgentContext): string {
-    const basePrompt = `You are an expert software engineer and DevOps specialist. Analyze the following task and create a detailed step-by-step plan.
+  private buildPlanningPrompt(context: AgentContext, projectContext: string = ""): string {
+    const basePrompt = `You are an expert software engineer and DevOps specialist built by G R Harsha.
+Analyze the following task and create a detailed step-by-step plan.
 
 Task: ${context.task}
 Action: ${context.action}
 ${context.customAction ? `Custom Action: ${context.customAction}` : ""}
 ${context.repository ? `Repository: ${context.repository.owner}/${context.repository.repo} (${context.repository.provider})` : ""}
+${context.projectId ? `Local Project ID: ${context.projectId}` : ""}
+
+${projectContext ? `PROJECT CONTEXT (Files & Structure):\n${projectContext}` : ""}
 
 Create a comprehensive plan that includes:
 1. Understanding the requirements
@@ -175,16 +207,17 @@ Format the response as a structured application with file paths and contents.`;
     };
   }
 
-  private async enhanceRepository(context: AgentContext, plan: string): Promise<any> {
-    if (!context.repository) throw new Error("Repository required for enhancement");
+  private async enhanceRepository(context: AgentContext, plan: string, projectContext: string = ""): Promise<any> {
+    if (!context.repository && !context.projectId) throw new Error("Repository or Project ID required for enhancement");
 
     const enhancePrompt = `Based on this plan:
 ${plan}
 
-Repository: ${context.repository.owner}/${context.repository.repo}
+${projectContext ? `Current Project Context:\n${projectContext}` : ""}
+
 Task: ${context.task}
 
-Analyze the repository and provide:
+Analyze the codebase and provide:
 1. Enhancement recommendations
 2. Code improvements
 3. Performance optimizations
@@ -196,21 +229,22 @@ Provide specific code changes and improvements.`;
     const improvements = await this.executeWithFast(enhancePrompt);
 
     return {
-      summary: `Repository ${context.repository.owner}/${context.repository.repo} has been analyzed and enhanced.`,
+      summary: `Repository ${context.repository?.owner}/${context.repository?.repo || context.projectId} has been analyzed and enhanced.`,
       code: improvements,
     };
   }
 
-  private async debugRepository(context: AgentContext, plan: string): Promise<any> {
-    if (!context.repository) throw new Error("Repository required for debugging");
+  private async debugRepository(context: AgentContext, plan: string, projectContext: string = ""): Promise<any> {
+    if (!context.repository && !context.projectId) throw new Error("Repository or Project ID required for debugging");
 
     const debugPrompt = `Based on this plan:
 ${plan}
 
-Repository: ${context.repository.owner}/${context.repository.repo}
+${projectContext ? `Current Project Context:\n${projectContext}` : ""}
+
 Task: ${context.task}
 
-Debug the repository and provide:
+Debug the codebase and provide:
 1. Identified issues
 2. Root cause analysis
 3. Fixes for each issue
@@ -222,21 +256,22 @@ Provide specific fixes and explanations.`;
     const fixes = await this.executeWithFast(debugPrompt);
 
     return {
-      summary: `Repository ${context.repository.owner}/${context.repository.repo} has been debugged and fixed.`,
+      summary: `Repository ${context.repository?.owner}/${context.repository?.repo || context.projectId} has been debugged and fixed.`,
       code: fixes,
     };
   }
 
-  private async explainRepository(context: AgentContext, plan: string): Promise<any> {
-    if (!context.repository) throw new Error("Repository required for explanation");
+  private async explainRepository(context: AgentContext, plan: string, projectContext: string = ""): Promise<any> {
+    if (!context.repository && !context.projectId) throw new Error("Repository or Project ID required for explanation");
 
     const explainPrompt = `Based on this plan:
 ${plan}
 
-Repository: ${context.repository.owner}/${context.repository.repo}
+${projectContext ? `Current Project Context:\n${projectContext}` : ""}
+
 Task: ${context.task}
 
-Explain the repository:
+Explain the codebase:
 1. Architecture overview
 2. Key components
 3. Data flow
@@ -249,14 +284,16 @@ Provide a comprehensive explanation.`;
     const explanation = await this.executeWithFast(explainPrompt);
 
     return {
-      summary: `Repository ${context.repository.owner}/${context.repository.repo} has been explained.`,
+      summary: `Repository ${context.repository?.owner}/${context.repository?.repo || context.projectId} has been explained.`,
       code: explanation,
     };
   }
 
-  private async executeCustomAction(context: AgentContext, plan: string): Promise<any> {
+  private async executeCustomAction(context: AgentContext, plan: string, projectContext: string = ""): Promise<any> {
     const customPrompt = `Based on this plan:
 ${plan}
+
+${projectContext ? `Current Project Context:\n${projectContext}` : ""}
 
 Task: ${context.task}
 Custom Action: ${context.customAction}

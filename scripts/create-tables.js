@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { Pool } = require('pg');
+const { Pool } = require("pg");
 
 const sql = `
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -73,11 +73,48 @@ CREATE TABLE IF NOT EXISTS project_files (
 );
 CREATE INDEX IF NOT EXISTS idx_project_files_project ON project_files(project_id);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_project_files_project_path ON project_files(project_id, path);
+
+-- Mobile App Builder tables
+CREATE TABLE IF NOT EXISTS mobile_projects (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  description text,
+  user_id uuid NOT NULL,
+  status text DEFAULT 'draft',
+  config jsonb,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_mobile_projects_user ON mobile_projects(user_id);
+
+CREATE TABLE IF NOT EXISTS app_screens (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id uuid NOT NULL,
+  name text NOT NULL,
+  layout jsonb NOT NULL,
+  is_initial boolean DEFAULT false,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_app_screens_project ON app_screens(project_id);
+
+CREATE TABLE IF NOT EXISTS mobile_builds (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id uuid NOT NULL,
+  status text DEFAULT 'pending',
+  platform text,
+  build_url text,
+  qr_code_url text,
+  logs text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_mobile_builds_project ON mobile_builds(project_id);
 `;
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
-  console.error('DATABASE_URL not set; cannot create tables');
+  console.error("DATABASE_URL not set; cannot create tables");
   process.exit(1);
 }
 
@@ -85,9 +122,9 @@ if (!DATABASE_URL) {
   const pool = new Pool({ connectionString: DATABASE_URL });
   try {
     await pool.query(sql);
-    console.log('Tables created/verified');
+    console.log("Tables created/verified");
   } catch (err) {
-    console.error('Failed to create tables', err);
+    console.error("Failed to create tables", err);
     process.exit(1);
   } finally {
     await pool.end();

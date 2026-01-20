@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Bot,
@@ -23,6 +22,9 @@ import {
   Users,
   Zap
 } from "lucide-react";
+import { AIService, AGENT_PROMPTS } from "@/lib/ai";
+import { useToast } from "@/hooks/use-toast";
+import { Link } from "react-router-dom"; // Assuming react-router is used
 
 interface Agent {
   id: string;
@@ -49,16 +51,25 @@ interface MultiAgentSystemProps {
   currentProject?: {
     files: Array<{ path: string; content: string; language: string }>;
     requirements?: string;
+    projectType?: 'web' | 'mobile';
   };
+  projectType?: 'web' | 'mobile';
 }
 
 const AGENTS: Omit<Agent, 'status' | 'progress' | 'messages'>[] = [
+  {
+    id: 'architect-agent',
+    name: 'Chief Architect',
+    role: 'System Design',
+    icon: <Bot className="w-4 h-4" />,
+    specialty: 'Architecture, Stack Selection, High-Level Design'
+  },
   {
     id: 'frontend-agent',
     name: 'Frontend Architect',
     role: 'UI/UX Developer',
     icon: <Palette className="w-4 h-4" />,
-    specialty: 'React, Vue, Angular, CSS, Responsive Design'
+    specialty: 'React, Vue, React Native, Flutter, UI Design'
   },
   {
     id: 'backend-agent',
@@ -73,20 +84,6 @@ const AGENTS: Omit<Agent, 'status' | 'progress' | 'messages'>[] = [
     role: 'Database Designer',
     icon: <Database className="w-4 h-4" />,
     specialty: 'PostgreSQL, MongoDB, Redis, Schema Design'
-  },
-  {
-    id: 'testing-agent',
-    name: 'Quality Assurance',
-    role: 'Test Engineer',
-    icon: <TestTube className="w-4 h-4" />,
-    specialty: 'Unit Tests, Integration Tests, E2E Testing'
-  },
-  {
-    id: 'security-agent',
-    name: 'Security Specialist',
-    role: 'Security Engineer',
-    icon: <Shield className="w-4 h-4" />,
-    specialty: 'Authentication, Authorization, Security Audits'
   },
   {
     id: 'devops-agent',
@@ -105,6 +102,7 @@ const AGENTS: Omit<Agent, 'status' | 'progress' | 'messages'>[] = [
 ];
 
 export function MultiAgentSystem({ onTaskComplete, currentProject }: MultiAgentSystemProps) {
+  const { toast } = useToast();
   const [agents, setAgents] = useState<Agent[]>(() =>
     AGENTS.map(agent => ({
       ...agent,
@@ -114,9 +112,16 @@ export function MultiAgentSystem({ onTaskComplete, currentProject }: MultiAgentS
     }))
   );
   const [isRunning, setIsRunning] = useState(false);
-  const [currentTask, setCurrentTask] = useState<string>("");
+  const [currentTask, setCurrentTask] = useState<string>(currentProject?.requirements || "");
   const [conversation, setConversation] = useState<AgentMessage[]>([]);
   const conversationRef = useRef<HTMLDivElement>(null);
+
+  // Auto-start if requirements are provided and not running
+  useEffect(() => {
+    if (currentProject?.requirements && !isRunning && conversation.length === 0) {
+        startMultiAgentTask(currentProject.requirements);
+    }
+  }, [currentProject]);
 
   useEffect(() => {
     if (conversationRef.current) {
@@ -127,7 +132,7 @@ export function MultiAgentSystem({ onTaskComplete, currentProject }: MultiAgentS
   const sendMessage = (message: Omit<AgentMessage, 'id' | 'timestamp'>) => {
     const newMessage: AgentMessage = {
       ...message,
-      id: Date.now().toString(),
+      id: Date.now().toString() + Math.random(),
       timestamp: new Date()
     };
     setConversation(prev => [...prev, newMessage]);
@@ -143,140 +148,178 @@ export function MultiAgentSystem({ onTaskComplete, currentProject }: MultiAgentS
 
   const startMultiAgentTask = async (task: string) => {
     if (isRunning) return;
+    if (!task.trim()) {
+        toast({ title: "Error", description: "Please enter a project description.", variant: "destructive" });
+        return;
+    }
 
     setIsRunning(true);
     setCurrentTask(task);
-    setConversation([]);
+    setConversation([]); // Clear previous conversation
+
+    // Project State to accumulate results
+    let projectState = {
+        requirements: task,
+        architecture: null as any,
+        frontend: null as any,
+        backend: null as any,
+        files: [] as any[]
+    };
 
     try {
-      // Initialize agents
+      // Initialize
       sendMessage({
         from: 'System',
-        content: `🚀 Starting multi-agent task: "${task}"`,
+        content: `🚀 Starting multi-agent workflow for: "${task}"`,
         type: 'task'
       });
 
-      // Phase 1: Planning and Requirements Analysis
+      // --- PHASE 1: ARCHITECTURE ---
+      updateAgentStatus('architect-agent', 'working', 20);
+      sendMessage({ from: 'System', to: 'Chief Architect', content: 'Analyze requirements and define architecture.', type: 'task' });
+      
+      const archPrompt = AGENT_PROMPTS.ARCHITECT(task);
+      const architecture = await AIService.generateStructuredJSON(archPrompt, "{ stack: { frontend, backend, database }, structure: [], summary: string }");
+      
+      projectState.architecture = architecture;
+      sendMessage({ 
+          from: 'Chief Architect', 
+          content: `Architecture defined: ${architecture.summary}. Stack: ${architecture.stack.frontend} + ${architecture.stack.backend}.`, 
+          type: 'response' 
+      });
+      updateAgentStatus('architect-agent', 'completed', 100);
+
+      // --- PHASE 2: PARALLEL DESIGN (Frontend & Backend) ---
       updateAgentStatus('frontend-agent', 'working', 10);
+      updateAgentStatus('backend-agent', 'working', 10);
+      
+      const [frontendDesign, backendDesign] = await Promise.all([
+          (async () => {
+             sendMessage({ from: 'Chief Architect', to: 'Frontend Architect', content: 'Design UI components and routes.', type: 'task' });
+             const prompt = AGENT_PROMPTS.FRONTEND(task, architecture.stack);
+             const res = await AIService.generateStructuredJSON(prompt, "{ components: [], routes: [], theme: string }");
+             sendMessage({ from: 'Frontend Architect', content: `Designed ${res.components.length} components.`, type: 'response' });
+             updateAgentStatus('frontend-agent', 'completed', 100);
+             return res;
+          })(),
+          (async () => {
+             sendMessage({ from: 'Chief Architect', to: 'Backend Engineer', content: 'Design API endpoints and DB schema.', type: 'task' });
+             const prompt = AGENT_PROMPTS.BACKEND(task, architecture.stack);
+             const res = await AIService.generateStructuredJSON(prompt, "{ endpoints: [], models: [] }");
+             sendMessage({ from: 'Backend Engineer', content: `Designed ${res.endpoints.length} endpoints and ${res.models.length} models.`, type: 'response' });
+             updateAgentStatus('backend-agent', 'completed', 100);
+             return res;
+          })()
+      ]);
+
+      projectState.frontend = frontendDesign;
+      projectState.backend = backendDesign;
+
+      // --- PHASE 3: DB & DEVOPS ---
+      updateAgentStatus('database-agent', 'working', 50);
+      sendMessage({ from: 'Backend Engineer', to: 'Data Architect', content: 'Finalize schema details.', type: 'task' });
+      
+      const dbPrompt = AGENT_PROMPTS.DATABASE(task, architecture.stack, backendDesign.models);
+      const dbDesign = await AIService.generateStructuredJSON(dbPrompt, "{ schema: string, migrations: string[] }");
+      
+      sendMessage({ from: 'Data Architect', content: `Schema optimized. Planned ${dbDesign.migrations.length} migrations.`, type: 'response' });
+      updateAgentStatus('database-agent', 'completed', 100);
+
+      // --- PHASE 4: CODE GENERATION ---
+      updateAgentStatus('code-agent', 'working', 0);
+      sendMessage({ from: 'System', to: 'Code Generator', content: 'Begin generating source code files.', type: 'task' });
+      
+      // We will generate a few key files to demonstrate
+      // In a real full run, we'd iterate over all components
+      const filesToGenerate = [
+          ...frontendDesign.components.slice(0, 3).map((c: any) => ({ name: c.name + '.tsx', desc: c.description, type: 'frontend' })),
+          ...backendDesign.models.slice(0, 2).map((m: any) => ({ name: m.name + '.ts', desc: `Model with fields: ${JSON.stringify(m.fields)}`, type: 'backend' }))
+      ];
+
+      const generatedFiles = [];
+      let progressStep = 100 / (filesToGenerate.length + 1); // +1 for DevOps
+      let currentProgress = 0;
+
+      for (const file of filesToGenerate) {
+          sendMessage({ from: 'Code Generator', content: `Generating ${file.name}...`, type: 'task' });
+          // Adjust stack for Mobile if needed
+          const stackToUse = currentProject?.projectType === 'mobile' ? { ...architecture.stack, frontend: 'React Native' } : architecture.stack;
+          
+          const code = await AIService.generateContent(
+              AGENT_PROMPTS.CODE_GENERATOR(file.name, file.desc, stackToUse)
+          );
+          
+          if (code.error) {
+            throw new Error(code.error);
+          }
+          
+          // Strip code blocks if present
+          const cleanCode = code.content.replace(/```(typescript|javascript|tsx|ts)?\n?|```/g, '');
+          
+          generatedFiles.push({
+              path: file.name,
+              content: cleanCode,
+              language: 'typescript'
+          });
+
+          currentProgress += progressStep;
+          updateAgentStatus('code-agent', 'working', Math.min(99, currentProgress));
+      }
+      
+      updateAgentStatus('code-agent', 'completed', 100);
+      updateAgentStatus('devops-agent', 'working', 80);
+      sendMessage({ from: 'DevOps Engineer', content: 'Preparing deployment configuration...', type: 'task' });
+      
+      const devopsPrompt = AGENT_PROMPTS.DEVOPS(task, architecture.stack);
+      const devopsConfig = await AIService.generateStructuredJSON(devopsPrompt, "{ configFiles: [], instructions: string }");
+
+      for (const file of devopsConfig.configFiles) {
+          generatedFiles.push({
+              path: file.name,
+              content: file.content,
+              language: 'yaml' // or generic
+          });
+      }
+
+      sendMessage({ from: 'DevOps Engineer', content: `Configuration ready. ${devopsConfig.instructions.substring(0, 100)}...`, type: 'response' });
+      updateAgentStatus('devops-agent', 'completed', 100);
+
+
+      // Complete
       sendMessage({
-        from: 'Frontend Architect',
-        content: 'Analyzing UI/UX requirements and planning component architecture...',
-        type: 'task'
+        from: 'System',
+        content: '✅ All tasks completed successfully. Project is ready for review.',
+        type: 'response'
       });
 
-      // Simulate agent communication
-      setTimeout(() => {
-        sendMessage({
-          from: 'Frontend Architect',
-          to: 'Backend Engineer',
-          content: 'What API endpoints will you need for this feature?',
-          type: 'collaboration'
-        });
-        updateAgentStatus('frontend-agent', 'completed', 100);
-        updateAgentStatus('backend-agent', 'working', 20);
-      }, 1000);
+      const result = {
+          ...projectState,
+          generatedFiles
+      };
 
-      setTimeout(() => {
-        sendMessage({
-          from: 'Backend Engineer',
-          to: 'Data Architect',
-          content: 'Planning database schema for user management and content storage',
-          type: 'collaboration'
-        });
-        updateAgentStatus('backend-agent', 'completed', 100);
-        updateAgentStatus('database-agent', 'working', 30);
-      }, 2000);
+      onTaskComplete(result);
+      setIsRunning(false);
+      setCurrentTask("");
 
-      setTimeout(() => {
-        sendMessage({
-          from: 'Data Architect',
-          content: 'Database schema designed. Creating migrations and models.',
-          type: 'response'
-        });
-        updateAgentStatus('database-agent', 'completed', 100);
-        updateAgentStatus('code-agent', 'working', 50);
-      }, 3000);
-
-      setTimeout(() => {
-        sendMessage({
-          from: 'Code Generator',
-          content: 'Generating boilerplate code and initial implementation...',
-          type: 'task'
-        });
-        updateAgentStatus('code-agent', 'completed', 100);
-        updateAgentStatus('testing-agent', 'working', 70);
-      }, 4000);
-
-      setTimeout(() => {
-        sendMessage({
-          from: 'Quality Assurance',
-          content: 'Writing comprehensive test suites and integration tests...',
-          type: 'task'
-        });
-        updateAgentStatus('testing-agent', 'completed', 100);
-        updateAgentStatus('security-agent', 'working', 85);
-      }, 5000);
-
-      setTimeout(() => {
-        sendMessage({
-          from: 'Security Specialist',
-          content: 'Implementing authentication, input validation, and security measures...',
-          type: 'task'
-        });
-        updateAgentStatus('security-agent', 'completed', 100);
-        updateAgentStatus('devops-agent', 'working', 95);
-      }, 6000);
-
-      setTimeout(() => {
-        sendMessage({
-          from: 'DevOps Engineer',
-          content: 'Setting up deployment pipeline and infrastructure configuration...',
-          type: 'task'
-        });
-        updateAgentStatus('devops-agent', 'completed', 100);
-      }, 7000);
-
-      // Complete the task
-      setTimeout(() => {
-        sendMessage({
-          from: 'System',
-          content: '✅ Multi-agent task completed successfully! All components generated.',
-          type: 'response'
-        });
-
-        // Generate sample result
-        const result = {
-          frontend: {
-            components: ['App.js', 'Header.js', 'Dashboard.js'],
-            styles: ['main.css', 'components.css']
-          },
-          backend: {
-            routes: ['/api/users', '/api/auth', '/api/data'],
-            models: ['User.js', 'Session.js']
-          },
-          database: {
-            tables: ['users', 'sessions', 'content'],
-            migrations: ['001_initial.sql', '002_add_indexes.sql']
-          },
-          tests: {
-            unit: ['user.test.js', 'auth.test.js'],
-            integration: ['api.test.js']
-          }
-        };
-
-        onTaskComplete(result);
-        setIsRunning(false);
-        setCurrentTask("");
-      }, 8000);
-
-    } catch (error) {
+    } catch (error: any) {
       console.error('Multi-agent task failed:', error);
       sendMessage({
         from: 'System',
-        content: '❌ Task failed. Agents encountered an error.',
+        content: `❌ Task failed: ${error.message}`,
         type: 'error'
       });
+      
+      if (error.message.includes("API Key")) {
+          toast({
+              title: "Missing API Key",
+              description: "Please configure Gemini API key in Settings.",
+              variant: "destructive",
+              action: <Link to="/settings"><Button variant="outline" size="sm">Open Settings</Button></Link>
+          });
+      }
+      
       setIsRunning(false);
+      updateAgentStatus('architect-agent', 'error');
     }
   };
 
