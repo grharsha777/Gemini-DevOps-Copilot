@@ -241,6 +241,14 @@ export default function Settings() {
     deploymentStatus: true,
   });
 
+  // 9. AI Tier Configuration (Fast/Pro)
+  const [tierConfig, setTierConfig] = useState({
+    fastProvider: "",
+    fastModel: "",
+    proProvider: "",
+    proModel: "",
+  });
+
   // Load Settings
   useEffect(() => {
     // In a real app with strict security, we'd prompt for a master password here.
@@ -286,6 +294,14 @@ export default function Settings() {
       // ... load others similarly
     };
     loadSecure();
+
+    // Load tier config
+    setTierConfig({
+      fastProvider: localStorage.getItem("fastProvider") || "",
+      fastModel: localStorage.getItem("fastModel") || "",
+      proProvider: localStorage.getItem("proProvider") || "",
+      proModel: localStorage.getItem("proModel") || "",
+    });
   }, []);
 
   const handleSave = async () => {
@@ -308,6 +324,38 @@ export default function Settings() {
     save("renderKey", deployConfig.renderKey);
     save("awsAccessKey", deployConfig.awsAccess);
     save("awsSecretKey", deployConfig.awsSecret);
+
+    // Save tier configuration
+    save("fastProvider", tierConfig.fastProvider);
+    save("fastModel", tierConfig.fastModel);
+    save("proProvider", tierConfig.proProvider);
+    save("proModel", tierConfig.proModel);
+
+    // Auto-populate API keys for tiers based on selected provider
+    const providerKeyMap: Record<string, string> = {
+      gemini: aiConfig.geminiKey,
+      mistral: aiConfig.mistralKey,
+      openai: aiConfig.openaiKey,
+      groq: aiConfig.groqKey,
+      anthropic: aiConfig.anthropicKey,
+      deepseek: aiConfig.deepseekKey,
+      openrouter: aiConfig.openrouterKey,
+      huggingface: aiConfig.huggingfaceKey,
+      custom: aiConfig.customApiKey,
+    };
+
+    if (tierConfig.fastProvider && providerKeyMap[tierConfig.fastProvider]) {
+      save("fastApiKey", providerKeyMap[tierConfig.fastProvider]);
+      if (tierConfig.fastProvider === "custom" && aiConfig.customBaseUrl) {
+        save("fastBaseUrl", aiConfig.customBaseUrl);
+      }
+    }
+    if (tierConfig.proProvider && providerKeyMap[tierConfig.proProvider]) {
+      save("proApiKey", providerKeyMap[tierConfig.proProvider]);
+      if (tierConfig.proProvider === "custom" && aiConfig.customBaseUrl) {
+        save("proBaseUrl", aiConfig.customBaseUrl);
+      }
+    }
 
     toast({
       title: "Settings Saved",
@@ -420,52 +468,52 @@ export default function Settings() {
         {
           method:
             service.toLowerCase() === "github" ||
-            service.toLowerCase() === "gitlab" ||
-            service.toLowerCase() === "vercel" ||
-            service.toLowerCase() === "netlify" ||
-            service.toLowerCase() === "youtube"
+              service.toLowerCase() === "gitlab" ||
+              service.toLowerCase() === "vercel" ||
+              service.toLowerCase() === "netlify" ||
+              service.toLowerCase() === "youtube"
               ? "GET"
               : "POST",
           headers:
             service.toLowerCase() === "youtube"
               ? {}
               : {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${apiKey}`,
-                },
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
           body:
             service.toLowerCase() === "github" ||
-            service.toLowerCase() === "gitlab" ||
-            service.toLowerCase() === "vercel" ||
-            service.toLowerCase() === "netlify"
+              service.toLowerCase() === "gitlab" ||
+              service.toLowerCase() === "vercel" ||
+              service.toLowerCase() === "netlify"
               ? undefined
               : service.toLowerCase() === "anthropic"
                 ? JSON.stringify({
-                    model: "claude-3-5-sonnet-20241022",
-                    max_tokens: 10,
-                    messages: [{ role: "user", content: "Test connection" }],
-                  })
+                  model: "claude-3-5-sonnet-20241022",
+                  max_tokens: 10,
+                  messages: [{ role: "user", content: "Test connection" }],
+                })
                 : service.toLowerCase() === "huggingface"
                   ? JSON.stringify({
-                      inputs: "Test connection",
-                    })
+                    inputs: "Test connection",
+                  })
                   : JSON.stringify({
-                      messages: [{ role: "user", content: "Test connection" }],
-                      model:
-                        service.toLowerCase() === "gemini"
-                          ? "gemini-pro"
-                          : service.toLowerCase() === "mistral"
-                            ? "mistral-tiny"
-                            : service.toLowerCase() === "openai"
-                              ? "gpt-3.5-turbo"
-                              : service.toLowerCase() === "groq"
-                                ? "mixtral-8x7b-32768"
-                                : service.toLowerCase() === "deepseek"
-                                  ? "deepseek-chat"
-                                  : service.toLowerCase() === "openrouter"
-                                    ? "openai/gpt-3.5-turbo"
-                                    : "mistral-7b-instruct",
-                    }),
+                    messages: [{ role: "user", content: "Test connection" }],
+                    model:
+                      service.toLowerCase() === "gemini"
+                        ? "gemini-pro"
+                        : service.toLowerCase() === "mistral"
+                          ? "mistral-tiny"
+                          : service.toLowerCase() === "openai"
+                            ? "gpt-3.5-turbo"
+                            : service.toLowerCase() === "groq"
+                              ? "mixtral-8x7b-32768"
+                              : service.toLowerCase() === "deepseek"
+                                ? "deepseek-chat"
+                                : service.toLowerCase() === "openrouter"
+                                  ? "openai/gpt-3.5-turbo"
+                                  : "mistral-7b-instruct",
+                  }),
         },
       );
 
@@ -509,7 +557,7 @@ export default function Settings() {
 
       <Accordion
         type="multiple"
-        defaultValue={["ai", "git", "deploy"]}
+        defaultValue={["ai", "tiers", "git", "deploy"]}
         className="space-y-4"
       >
         {/* 1. AI Models */}
@@ -635,6 +683,102 @@ export default function Settings() {
                   }
                   placeholder="Your custom API key"
                 />
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* AI Tier Configuration */}
+        <AccordionItem value="tiers" className="border rounded-lg bg-card px-4">
+          <AccordionTrigger className="hover:no-underline">
+            <div className="flex items-center gap-2">
+              <Zap className="w-5 h-5 text-yellow-500" />
+              <span className="font-semibold text-lg">
+                AI Tier Configuration
+              </span>
+              <Badge variant="outline" className="ml-2 text-xs">Required</Badge>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-6 pt-4">
+            <div className="p-4 border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 rounded-lg">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                <strong>Important:</strong> Select which AI provider to use for Fast (quick responses) and Pro (high-quality) tiers.
+                Make sure you have added the corresponding API key above before selecting a provider.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Fast Tier */}
+              <div className="p-4 border rounded-md bg-muted/20 space-y-4">
+                <h3 className="font-medium flex items-center gap-2">
+                  <Zap size={16} className="text-yellow-500" /> Fast Tier (Quick Responses)
+                </h3>
+                <div className="space-y-2">
+                  <Label>Provider</Label>
+                  <Select
+                    value={tierConfig.fastProvider}
+                    onValueChange={(v) => setTierConfig({ ...tierConfig, fastProvider: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Fast provider..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gemini">Google Gemini</SelectItem>
+                      <SelectItem value="mistral">Mistral AI</SelectItem>
+                      <SelectItem value="groq">Groq (Fast Inference)</SelectItem>
+                      <SelectItem value="openai">OpenAI</SelectItem>
+                      <SelectItem value="anthropic">Anthropic Claude</SelectItem>
+                      <SelectItem value="deepseek">DeepSeek</SelectItem>
+                      <SelectItem value="openrouter">OpenRouter</SelectItem>
+                      <SelectItem value="huggingface">Hugging Face</SelectItem>
+                      <SelectItem value="custom">Custom API</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Model Override (Optional)</Label>
+                  <Input
+                    value={tierConfig.fastModel}
+                    onChange={(e) => setTierConfig({ ...tierConfig, fastModel: e.target.value })}
+                    placeholder="Leave empty for default"
+                  />
+                </div>
+              </div>
+
+              {/* Pro Tier */}
+              <div className="p-4 border rounded-md bg-muted/20 space-y-4">
+                <h3 className="font-medium flex items-center gap-2">
+                  <Crown size={16} className="text-purple-500" /> Pro Tier (High Quality)
+                </h3>
+                <div className="space-y-2">
+                  <Label>Provider</Label>
+                  <Select
+                    value={tierConfig.proProvider}
+                    onValueChange={(v) => setTierConfig({ ...tierConfig, proProvider: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Pro provider..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gemini">Google Gemini</SelectItem>
+                      <SelectItem value="mistral">Mistral AI</SelectItem>
+                      <SelectItem value="groq">Groq</SelectItem>
+                      <SelectItem value="openai">OpenAI GPT-4</SelectItem>
+                      <SelectItem value="anthropic">Anthropic Claude</SelectItem>
+                      <SelectItem value="deepseek">DeepSeek</SelectItem>
+                      <SelectItem value="openrouter">OpenRouter</SelectItem>
+                      <SelectItem value="huggingface">Hugging Face</SelectItem>
+                      <SelectItem value="custom">Custom API</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Model Override (Optional)</Label>
+                  <Input
+                    value={tierConfig.proModel}
+                    onChange={(e) => setTierConfig({ ...tierConfig, proModel: e.target.value })}
+                    placeholder="Leave empty for default"
+                  />
+                </div>
               </div>
             </div>
           </AccordionContent>
